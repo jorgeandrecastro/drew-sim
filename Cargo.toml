@@ -1,0 +1,45 @@
+# Copyright (C) 2026 Jorge Andre Castro
+# GPL-2.0-or-later
+[package]
+name          = "drew-sim"
+version       = "0.1.0"
+edition       = "2024"
+authors       = ["Jorge Andre Castro <georgeandrec@gmail.com>"]
+description   = "Librairie de rendu 3D immédiat pour eframe/egui : maillages STL, caméra orbitale, télémétrie (axes, trajectoire, graphes)."
+documentation = "https://docs.rs/drew-sim"
+readme        = "README.md"
+keywords      = ["egui", "eframe", "3d", "rendering", "stl"]
+categories    = ["rendering", "visualization", "game-development"]
+license       = "GPL-2.0-or-later"
+repository    = "https://github.com/jorgeandrecastro/drew-sim"
+build         = false
+autolib       = false
+autobins      = false
+autoexamples  = false
+autotests     = false
+autobenches   = false
+
+[lib]
+name = "drew_sim"
+path = "src/lib.rs"
+
+[[example]]
+name = "orbit_viewer"
+path = "examples/orbit_viewer.rs"
+
+[features]
+default = ["stl"]
+# Chargement de maillages depuis des fichiers .STL via stl_io
+stl = ["dep:stl_io"]
+
+[dependencies]
+eframe = "0.27"
+
+[dependencies.stl_io]
+version  = "0.7"
+optional = true
+
+[profile.release]
+opt-level     = "z"
+lto           = true
+codegen-units = 1

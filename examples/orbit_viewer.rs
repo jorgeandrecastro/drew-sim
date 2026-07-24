@@ -2,6 +2,12 @@
 //! sa trajectoire et un petit graphe de télémétrie (altitude simulée).
 //!
 //! Lancer avec : `cargo run --example orbit_viewer --release`
+//!
+//! Écrit pour eframe/egui 0.35 : `App::ui(&mut self, ui: &mut egui::Ui, ...)`
+//! remplace l'ancien `App::update(&mut self, ctx: &egui::Context, ...)`, et
+//! les panels s'affichent maintenant via `.show(ui, ...)` plutôt que
+//! `.show(ctx, ...)`. `SidePanel` a été remplacé par `Panel` (unifié avec
+//! `TopBottomPanel`).
 
 use drew_sim::egui;
 use drew_sim::{Engine3D, Mesh3D, Rotation3D, TelemetryState, TrailBuffer};
@@ -37,7 +43,9 @@ impl Default for OrbitViewerApp {
 }
 
 impl eframe::App for OrbitViewerApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+
         // 1. Simulation physique / télémétrie
         if !self.paused {
             let dt = ctx.input(|i| i.stable_dt).min(0.1); // Pas de temps fluide
@@ -67,10 +75,10 @@ impl eframe::App for OrbitViewerApp {
         }
 
         // 2. Panneau de contrôle latéral (IHM)
-        egui::SidePanel::left("control_panel")
+        egui::Panel::left("control_panel")
             .resizable(true)
-            .default_width(240.0)
-            .show(ctx, |ui| {
+            .default_size(240.0)
+            .show(ui, |ui| {
                 ui.heading("🛰️ Orbit Viewer");
                 ui.small("Station de sol & Télémétrie");
                 ui.separator();
@@ -108,7 +116,7 @@ impl eframe::App for OrbitViewerApp {
             });
 
         // 3. Zone de rendu 3D
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             // Calcul préalable du rectangle du graphe pour éviter tout conflit de borrow avec `ui`
             let avail_rect = ui.available_rect_before_wrap();
             let chart_rect = egui::Rect::from_min_size(
@@ -151,13 +159,13 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1100.0, 680.0])
-            .with_title("drew-sim — Orbit Viewer Example"),
+            .with_title("drew-sim Orbit Viewer Example"),
         ..Default::default()
     };
 
     eframe::run_native(
         "drew-sim — orbit viewer",
         options,
-        Box::new(|_cc| Box::new(OrbitViewerApp::default())),
+        Box::new(|_cc| Ok(Box::new(OrbitViewerApp::default()))),
     )
 }

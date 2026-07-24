@@ -5,7 +5,7 @@
 [![docs.rs](https://docs.rs/drew-sim/badge.svg)](https://docs.rs/drew-sim)
 [![License: GPL-2.0-or-later](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](LICENSE)
 
-Librairie de rendu 3D immédiat pour applications [`eframe`]/[`egui`], pensée
+Librairie de rendu 3D immédiat pour applications [`eframe`]/[`egui`] (0.35+), pensée
 pour la visualisation de télémétrie temps réel : drones, robots, capteurs
 d'orientation.
 
@@ -13,25 +13,25 @@ d'orientation.
 
 ```toml
 [dependencies]
-drew-sim = "0.1"
+drew-sim = "0.2"
 ```
 
 La feature `stl` (chargement de fichiers `.stl`) est activée par défaut.
 Pour s'en passer :
 
 ```toml
-drew-sim = { version = "0.1", default-features = false }
+drew-sim = { version = "0.2", default-features = false }
 ```
 
 ## Contrôles souris (zone de rendu 3D)
 
-| Action                              | Effet             |
-|--------------------------------------|-------------------|
-| Clic gauche + glisser                | Orbite la caméra  |
-| Molette                              | Zoom              |
-| Clic droit **ou** clic molette + glisser | Panoramique   |
+| Action                                    | Effet             |
+|--------------------------------------------|-------------------|
+| Clic gauche + glisser                      | Orbite la caméra  |
+| Molette                                    | Zoom              |
+| Clic droit **ou** clic molette + glisser   | Panoramique       |
 
-Ces contrôles sont gérés automatiquement par `Engine3D::render` , rien à
+Ces contrôles sont gérés automatiquement par `Engine3D::render`,rien à
 faire côté application, mais rien n'est affiché à l'écran non plus (pas de
 widget de caméra visible : c'est purement à la souris).
 
@@ -55,7 +55,7 @@ widget de caméra visible : c'est purement à la souris).
 | `r.draw_mesh_with_stroke(&mesh, position, rotation, stroke)` | Idem, avec un `egui::Stroke` complet (épaisseur de trait) |
 | `r.draw_axes(position, rotation, length)` | Repère XYZ (Rouge = X, Vert = Y, Bleu = Z) |
 | `r.draw_trail(&points, color)` | Polyligne reliant un historique de positions |
-| `r.draw_chart(rect, &values, min, max, color)` | Graphe 2D (courbe de valeurs), indépendant de la caméra 3D :pour afficher un capteur en overlay |
+| `r.draw_chart(rect, &values, min, max, color)` | Graphe 2D (courbe de valeurs), indépendant de la caméra 3D , pour afficher un capteur en overlay |
 
 ### `Mesh3D` (`src/mesh.rs`)
 
@@ -81,9 +81,15 @@ widget de caméra visible : c'est purement à la souris).
 | `Rotation3D::new(roll, pitch, yaw)` | Angles en radians |
 | `Rotation3D::IDENTITY` | Rotation nulle |
 | `rotation.rotate_point(p)` | Applique la rotation à un point |
-| `rotation.compose(other)` | Cumule deux rotations (approximation par angles d'Euler — voir feuille de route) |
+| `rotation.compose(other)` | Cumule deux rotations (approximation par angles d'Euler) |
 
 ## Exemple minimal
+
+Depuis egui/eframe 0.35, `App::update(ctx, frame)` a été remplacé par
+`App::ui(ui, frame)` : on reçoit directement un `&mut egui::Ui` plutôt qu'un
+`&egui::Context`, et les panels se dessinent avec `.show(ui, ...)` au lieu de
+`.show(ctx, ...)`. Pour accéder au `Context` (ex : `request_repaint`), on
+passe par `ui.ctx()`.
 
 ```rust
 use drew_sim::{Engine3D, Mesh3D, Rotation3D, TelemetryState};
@@ -96,8 +102,8 @@ struct App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ui, |ui| {
             self.engine.render(ui, |r| {
                 r.draw_mesh(&self.mesh, self.state.position, self.state.rotation, egui::Color32::WHITE);
                 r.draw_axes(self.state.position, self.state.rotation, 1.5);
@@ -111,24 +117,20 @@ fn main() -> eframe::Result<()> {
         "drew-sim minimal",
         eframe::NativeOptions::default(),
         Box::new(|_cc| {
-            Box::new(App {
+            Ok(Box::new(App {
                 engine: Engine3D::default(),
                 mesh: Mesh3D::unit_cube(1.5),
                 state: TelemetryState::default(),
-            })
+            }))
         }),
     )
 }
 ```
 
-> Le type de retour attendu par `run_native` dépend de la version d'`eframe` :
-> en 0.27 la closure retourne directement `Box<dyn App>` (comme ci-dessus) ;
-> à partir de 0.28 elle retourne `Result<Box<dyn App>, _>` — adapter selon
-> ta version si `cargo` signale une erreur E0308 sur ce point.
-
 ## Exemple complet
 
-Un exemple plus riche (cube animé, trail, graphe d'altitude) est fourni :
+Un exemple plus riche (cube animé, panneau de contrôle, trail, graphe
+d'altitude) est fourni :
 
 ```bash
 cargo run --example orbit_viewer --release
@@ -144,4 +146,4 @@ cargo run --example orbit_viewer --release
 
 GPL-2.0-or-later — voir [LICENSE](LICENSE).
 
-## Copyright (C) 2026 Jorge Andre Castro
+Copyright (C) 2026 Jorge Andre Castro

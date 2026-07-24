@@ -100,7 +100,12 @@ impl<'a> Render3D<'a> {
         }
 
         self.painter.rect_filled(rect, 4.0, egui::Color32::from_black_alpha(150));
-        self.painter.rect_stroke(rect, 4.0, egui::Stroke::new(1.0, egui::Color32::GRAY));
+        self.painter.rect_stroke(
+            rect,
+            4.0,
+            egui::Stroke::new(1.0, egui::Color32::GRAY),
+            egui::StrokeKind::Middle,
+        );
 
         let (width, height, len) = (rect.width(), rect.height(), values.len());
         let stroke = egui::Stroke::new(1.5, color);

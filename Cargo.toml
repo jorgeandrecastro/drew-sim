@@ -2,7 +2,7 @@
 # GPL-2.0-or-later
 [package]
 name          = "drew-sim"
-version       = "0.1.1"
+version       = "0.2.0"
 edition       = "2024"
 authors       = ["Jorge Andre Castro <georgeandrec@gmail.com>"]
 description   = "Librairie de rendu 3D immédiat pour eframe/egui : maillages STL, caméra orbitale, télémétrie (axes, trajectoire, graphes)."

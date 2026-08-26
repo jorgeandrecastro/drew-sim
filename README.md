@@ -13,14 +13,14 @@ d'orientation.
 
 ```toml
 [dependencies]
-drew-sim = "0.2"
+drew-sim = "0.3"
 ```
 
 La feature `stl` (chargement de fichiers `.stl`) est activée par défaut.
 Pour s'en passer :
 
 ```toml
-drew-sim = { version = "0.2", default-features = false }
+drew-sim = { version = "0.3", default-features = false }
 ```
 
 ## Contrôles souris (zone de rendu 3D)
@@ -74,14 +74,20 @@ widget de caméra visible : c'est purement à la souris).
 | `TrailBuffer::new(capacity)` | Historique de positions à taille bornée (évite une fuite mémoire en session longue) |
 | `trail.push(pos)` / `trail.as_slice()` / `trail.clear()` | Alimenter et lire le buffer |
 
-### `Rotation3D` (`src/math.rs`)
+### Vecteurs et rotations (`src/math.rs`)
 
 | Fonction | Rôle |
 |---|---|
+| `add(a, b)` / `sub(a, b)` | Addition / soustraction de deux `Vec3` |
+| `scale(a, s)` | Mise à l'échelle d'un `Vec3` par un scalaire |
+| `dot(a, b)` | Produit scalaire |
+| `cross(a, b)` | Produit vectoriel |
+| `length(a)` | Norme du vecteur |
+| `normalize(a)` | Normalise le vecteur (renvoie `a` inchangé si trop proche de zéro) |
 | `Rotation3D::new(roll, pitch, yaw)` | Angles en radians |
 | `Rotation3D::IDENTITY` | Rotation nulle |
 | `rotation.rotate_point(p)` | Applique la rotation à un point |
-| `rotation.compose(other)` | Cumule deux rotations (approximation par angles d'Euler) |
+| `rotation.compose(other)` | Cumule deux rotations (composition matricielle exacte, gère le gimbal lock) |
 
 ## Exemple minimal
 
@@ -144,6 +150,6 @@ cargo run --example orbit_viewer --release
 
 ## Licence
 
-GPL-2.0-or-later — voir [LICENSE](LICENSE).
+GPL-2.0-or-later voir [LICENSE](LICENSE).
 
 Copyright (C) 2026 Jorge Andre Castro

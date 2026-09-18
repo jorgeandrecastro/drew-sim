@@ -1,7 +1,17 @@
 //! Exemple : visualiseur orbital affichant un cube animé, son repère XYZ,
 //! sa trajectoire et un petit graphe de télémétrie (altitude simulée).
 //!
-//! Lancer avec : `cargo run --example orbit_viewer --release`
+//! Lancer avec :
+//!
+//! ```text
+//! cargo run --example orbit_viewer --release
+//! cargo run --example orbit_viewer --release -- chemin/vers/modele.stl   # feature `stl`
+//! ```
+//!
+//! Sert aussi de test manuel pour les nouveautés de la 0.4 : attitude par
+//! interpolation de quaternions (`Rotation3D::slerp`), affichage du quaternion
+//! (`Quat`), arêtes uniques (`Mesh3D::edges`), `OrbitCamera::reset`,
+//! `GridStyle::with_*`.
 //!
 //! Écrit pour eframe/egui 0.35 : `App::ui(&mut self, ui: &mut egui::Ui, ...)`
 //! remplace l'ancien `App::update(&mut self, ctx: &egui::Context, ...)`, et
@@ -10,7 +20,9 @@
 //! `TopBottomPanel`).
 
 use drew_sim::egui;
-use drew_sim::{Engine3D, Mesh3D, Rotation3D, TelemetryState, TrailBuffer};
+use drew_sim::{Engine3D, GridStyle, Mesh3D, Quat, Rotation3D, TelemetryState, TrailBuffer};
+
+const HISTORY_LEN: usize = 200;
 
 struct OrbitViewerApp {
     engine: Engine3D,
@@ -24,22 +36,64 @@ struct OrbitViewerApp {
     orbit_speed: f32,
     orbit_radius: f32,
     paused: bool,
+    /// `false` : angles d'Euler animés directement ; `true` : interpolation
+    /// sphérique (slerp) entre deux attitudes clés.
+    slerp_attitude: bool,
 }
 
-impl Default for OrbitViewerApp {
-    fn default() -> Self {
+impl OrbitViewerApp {
+    fn new(mesh: Mesh3D) -> Self {
+        let mut engine = Engine3D::default();
+        engine.grid = GridStyle::default().with_half_lines(12);
+
         Self {
-            engine: Engine3D::default(),
-            mesh: Mesh3D::unit_cube(1.2),
+            engine,
+            mesh,
             state: TelemetryState::default(),
-            trail: TrailBuffer::new(200),
-            altitude_history: Vec::with_capacity(200),
+            trail: TrailBuffer::new(HISTORY_LEN),
+            altitude_history: Vec::with_capacity(HISTORY_LEN),
             time: 0.0,
             orbit_speed: 1.0,
             orbit_radius: 2.0,
             paused: false,
+            slerp_attitude: false,
         }
     }
+
+    /// Attitude à l'instant courant selon le mode choisi.
+    fn attitude(&self) -> Rotation3D {
+        let t = self.time;
+        if self.slerp_attitude {
+            let a = Rotation3D::IDENTITY;
+            let b = Rotation3D::new(0.6, 0.9, 2.5);
+            a.slerp(b, 0.5 + 0.5 * t.sin())
+        } else {
+            Rotation3D::new(
+                (t * 2.0).sin() * 0.2, // Léger roulis
+                (t * 1.5).cos() * 0.3, // Tangage
+                t * 0.5,               // Lacet continu
+            )
+        }
+    }
+}
+
+#[cfg(feature = "stl")]
+fn load_mesh() -> Mesh3D {
+    if let Some(path) = std::env::args().nth(1) {
+        match Mesh3D::from_stl_file(&path) {
+            Ok(mesh) => {
+                eprintln!("STL chargé : {path} ({} triangles)", mesh.triangle_count());
+                return mesh;
+            }
+            Err(e) => eprintln!("Impossible de charger {path} : {e} (cube par défaut)"),
+        }
+    }
+    Mesh3D::unit_cube(1.2)
+}
+
+#[cfg(not(feature = "stl"))]
+fn load_mesh() -> Mesh3D {
+    Mesh3D::unit_cube(1.2)
 }
 
 impl eframe::App for OrbitViewerApp {
@@ -58,26 +112,22 @@ impl eframe::App for OrbitViewerApp {
                 self.time.sin() * self.orbit_radius,
             ];
 
-            // Attachement d'attitude (Roll, Pitch, Yaw dynamiques)
-            self.state.rotation = Rotation3D::new(
-                (self.time * 2.0).sin() * 0.2, // Léger roulis
-                (self.time * 1.5).cos() * 0.3, // Tangage
-                self.time * 0.5,               // Lacet continu
-            );
+            self.state.rotation = self.attitude();
 
             // Mise à jour des historiques
             self.trail.push(self.state.position);
 
             self.altitude_history.push(self.state.position[1]);
-            if self.altitude_history.len() > 200 {
-                self.altitude_history.remove(0);
+            if self.altitude_history.len() > HISTORY_LEN {
+                let excess = self.altitude_history.len() - HISTORY_LEN;
+                self.altitude_history.drain(..excess);
             }
         }
 
         // 2. Panneau de contrôle latéral (IHM)
         egui::Panel::left("control_panel")
             .resizable(true)
-            .default_size(240.0)
+            .default_size(260.0)
             .show(ui, |ui| {
                 ui.heading("🛰️ Orbit Viewer");
                 ui.small("Station de sol & Télémétrie");
@@ -88,24 +138,44 @@ impl eframe::App for OrbitViewerApp {
                 ui.checkbox(&mut self.paused, "Pause simulation");
                 ui.add(egui::Slider::new(&mut self.orbit_speed, 0.1..=3.0).text("Vitesse"));
                 ui.add(egui::Slider::new(&mut self.orbit_radius, 0.5..=4.0).text("Rayon"));
+                ui.checkbox(&mut self.slerp_attitude, "Attitude par slerp (quaternions)");
 
-                if ui.button("🗑️ Effacer la trajectoire").clicked() {
-                    self.trail.clear();
-                    self.altitude_history.clear();
-                }
+                ui.horizontal(|ui| {
+                    if ui.button("🗑️ Effacer la trajectoire").clicked() {
+                        self.trail.clear();
+                        self.altitude_history.clear();
+                    }
+                    if ui.button("🎥 Reset caméra").clicked() {
+                        self.engine.camera.reset();
+                    }
+                });
 
                 ui.separator();
 
                 // Telemetry Data Box
                 ui.label("Données en direct :");
+                let q = Quat::from_euler(self.state.rotation);
                 egui::Frame::group(ui.style()).show(ui, |ui| {
                     ui.monospace(format!("Pos X: {:+.2} m", self.state.position[0]));
                     ui.monospace(format!("Alt Y: {:+.2} m", self.state.position[1]));
                     ui.monospace(format!("Pos Z: {:+.2} m", self.state.position[2]));
                     ui.separator();
+                    ui.monospace(format!("Roll:  {:+.2} rad", self.state.rotation.roll));
                     ui.monospace(format!("Pitch: {:+.2} rad", self.state.rotation.pitch));
                     ui.monospace(format!("Yaw:   {:+.2} rad", self.state.rotation.yaw));
+                    ui.separator();
+                    ui.monospace(format!("q.w: {:+.3}  q.x: {:+.3}", q.w, q.x));
+                    ui.monospace(format!("q.y: {:+.3}  q.z: {:+.3}", q.y, q.z));
                 });
+
+                ui.separator();
+                ui.label("Maillage :");
+                ui.small(format!(
+                    "{} sommets, {} triangles, {} arêtes uniques",
+                    self.mesh.vertices.len(),
+                    self.mesh.triangle_count(),
+                    self.mesh.edges().len()
+                ));
 
                 ui.separator();
                 ui.collapsing("🖱️ Contrôles Caméra", |ui| {
@@ -125,7 +195,7 @@ impl eframe::App for OrbitViewerApp {
             );
 
             self.engine.render(ui, |r| {
-                // Rendu du maillage fil de fer du cube
+                // Rendu du maillage fil de fer
                 r.draw_mesh(
                     &self.mesh,
                     self.state.position,
@@ -163,9 +233,11 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
 
+    let mesh = load_mesh();
+
     eframe::run_native(
         "drew-sim — orbit viewer",
         options,
-        Box::new(|_cc| Ok(Box::new(OrbitViewerApp::default()))),
+        Box::new(move |_cc| Ok(Box::new(OrbitViewerApp::new(mesh)))),
     )
 }

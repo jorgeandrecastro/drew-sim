@@ -8,9 +8,13 @@ pub const DEFAULT_ZOOM_RANGE: (f32, f32) = (0.2, 5.0);
 /// État de la caméra orbitale : angle d'orbite, zoom, décalage de panoramique.
 #[derive(Clone, Copy, Debug)]
 pub struct OrbitCamera {
+    /// Angle d'orbite horizontal (radians) autour de l'axe vertical.
     pub orbit: f32,
+    /// Facteur de zoom, borné par `zoom_range`.
     pub zoom: f32,
+    /// Décalage de panoramique (pixels écran).
     pub pan_offset: egui::Vec2,
+    /// Bornes `(min, max)` du zoom.
     pub zoom_range: (f32, f32),
 }
 
@@ -26,6 +30,12 @@ impl Default for OrbitCamera {
 }
 
 impl OrbitCamera {
+    /// Remet l'orbite, le zoom et le panoramique à leurs valeurs par défaut
+    /// (les bornes de zoom personnalisées sont conservées).
+    pub fn reset(&mut self) {
+        *self = Self { zoom_range: self.zoom_range, ..Self::default() };
+    }
+
     /// Met à jour la caméra à partir de la réponse d'interaction egui pour
     /// la zone de rendu (molette = zoom, clic droit/milieu + glisser = pan,
     /// clic gauche + glisser = orbite).

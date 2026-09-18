@@ -1,6 +1,6 @@
 //! Contexte de rendu : projection 3D -> 2D et primitives de dessin.
 
-use crate::math::{Rotation3D, Vec3};
+use crate::math::{add, mat3_mul_vec, Rotation3D, Vec3};
 use crate::mesh::Mesh3D;
 use eframe::egui;
 
@@ -9,18 +9,25 @@ use eframe::egui;
 /// Regroupe tout ce qu'il faut pour projeter un point 3D vers l'écran et
 /// dessiner par-dessus (maillages, repères, trajectoires, graphes).
 pub struct Render3D<'a> {
+    /// Peintre egui limité à la zone de rendu.
     pub painter: &'a egui::Painter,
+    /// Centre de la scène à l'écran (pan inclus).
     pub center: egui::Pos2,
+    /// Ordonnée écran du sol (y = 0).
     pub ground_y: f32,
+    /// Angle d'orbite de la caméra (radians) autour de l'axe vertical.
     pub camera_orbit: f32,
+    /// Facteur de zoom.
     pub zoom: f32,
 }
 
-impl<'a> Render3D<'a> {
+impl Render3D<'_> {
     /// Projection d'un point du monde 3D vers un point écran 2D.
     ///
     /// Projection orthographique simplifiée avec rotation orbitale sur
-    /// l'axe horizontal ; suffisante pour de la télémétrie temps réel.
+    /// l'axe vertical ; il n'y a donc ni perspective ni profondeur, et
+    /// aucun point ne peut se trouver « derrière » la caméra.
+    #[must_use]
     pub fn world_to_screen(&self, pos: Vec3) -> egui::Pos2 {
         let base_scale = 50.0 * self.zoom;
         let (sin_o, cos_o) = self.camera_orbit.sin_cos();
@@ -38,6 +45,9 @@ impl<'a> Render3D<'a> {
     }
 
     /// Variante de `draw_mesh` avec un `Stroke` complet (épaisseur incluse).
+    ///
+    /// Chaque sommet n'est tourné et projeté qu'une seule fois, et chaque
+    /// arête partagée n'est dessinée qu'une fois (voir [`Mesh3D::edges`]).
     pub fn draw_mesh_with_stroke(
         &self,
         mesh: &Mesh3D,
@@ -45,31 +55,34 @@ impl<'a> Render3D<'a> {
         rotation: Rotation3D,
         stroke: egui::Stroke,
     ) {
-        for tri in &mesh.triangles {
-            let screen: Vec<egui::Pos2> = tri
-                .iter()
-                .map(|&idx| {
-                    let r = rotation.rotate_point(mesh.vertices[idx]);
-                    let world = [r[0] + position[0], r[1] + position[1], r[2] + position[2]];
-                    self.world_to_screen(world)
-                })
-                .collect();
-
-            self.painter.line_segment([screen[0], screen[1]], stroke);
-            self.painter.line_segment([screen[1], screen[2]], stroke);
-            self.painter.line_segment([screen[2], screen[0]], stroke);
+        if mesh.vertices.is_empty() {
+            return;
         }
+
+        let m = rotation.to_matrix();
+        let screen: Vec<egui::Pos2> = mesh
+            .vertices
+            .iter()
+            .map(|&v| self.world_to_screen(add(mat3_mul_vec(&m, v), position)))
+            .collect();
+
+        let shapes: Vec<egui::Shape> = mesh
+            .edges()
+            .iter()
+            .filter_map(|&[a, b]| {
+                Some(egui::Shape::line_segment([*screen.get(a)?, *screen.get(b)?], stroke))
+            })
+            .collect();
+
+        self.painter.extend(shapes);
     }
 
     /// Dessine le repère d'axes XYZ (Rouge=X, Vert=Y, Bleu=Z) à une position.
     pub fn draw_axes(&self, position: Vec3, rotation: Rotation3D, length: f32) {
-        let origin = position;
-        let tip = |axis: Vec3| {
-            let r = rotation.rotate_point(axis);
-            self.world_to_screen([origin[0] + r[0], origin[1] + r[1], origin[2] + r[2]])
-        };
+        let m = rotation.to_matrix();
+        let tip = |axis: Vec3| self.world_to_screen(add(position, mat3_mul_vec(&m, axis)));
 
-        let p_origin = self.world_to_screen(origin);
+        let p_origin = self.world_to_screen(position);
         let p_x = tip([length, 0.0, 0.0]);
         let p_y = tip([0.0, length, 0.0]);
         let p_z = tip([0.0, 0.0, length]);
@@ -84,12 +97,8 @@ impl<'a> Render3D<'a> {
         if points.len() < 2 {
             return;
         }
-        let stroke = egui::Stroke::new(1.5, color);
-        for w in points.windows(2) {
-            let p1 = self.world_to_screen(w[0]);
-            let p2 = self.world_to_screen(w[1]);
-            self.painter.line_segment([p1, p2], stroke);
-        }
+        let pts: Vec<egui::Pos2> = points.iter().map(|&p| self.world_to_screen(p)).collect();
+        self.painter.add(egui::Shape::line(pts, egui::Stroke::new(1.5, color)));
     }
 
     /// Dessine un graphique 2D (courbe de valeurs) dans un rectangle donné
@@ -108,16 +117,16 @@ impl<'a> Render3D<'a> {
         );
 
         let (width, height, len) = (rect.width(), rect.height(), values.len());
-        let stroke = egui::Stroke::new(1.5, color);
+        let pts: Vec<egui::Pos2> = values
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| {
+                let x_norm = i as f32 / (len - 1) as f32;
+                let y_norm = ((v - min_val) / (max_val - min_val)).clamp(0.0, 1.0);
+                egui::pos2(rect.min.x + x_norm * width, rect.max.y - y_norm * height)
+            })
+            .collect();
 
-        let point_at = |i: usize| {
-            let x_norm = i as f32 / (len - 1) as f32;
-            let y_norm = ((values[i] - min_val) / (max_val - min_val)).clamp(0.0, 1.0);
-            egui::pos2(rect.min.x + x_norm * width, rect.max.y - y_norm * height)
-        };
-
-        for i in 0..len - 1 {
-            self.painter.line_segment([point_at(i), point_at(i + 1)], stroke);
-        }
+        self.painter.add(egui::Shape::line(pts, egui::Stroke::new(1.5, color)));
     }
 }

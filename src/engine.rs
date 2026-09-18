@@ -6,12 +6,26 @@ use crate::render::Render3D;
 use eframe::egui;
 
 /// Options d'apparence de la grille au sol.
+///
+/// Marquée `#[non_exhaustive]` : de nouveaux champs pourront être ajoutés
+/// sans casser la compatibilité. Hors de la crate, pars de `default()` puis
+/// utilise les méthodes `with_*` ou modifie les champs :
+///
+/// ```ignore
+/// let grid = GridStyle::default().with_step_px(30.0).with_half_lines(20);
+/// ```
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct GridStyle {
+    /// Couleur des lignes de la grille.
     pub line_color: egui::Color32,
+    /// Couleur de la ligne de sol.
     pub ground_color: egui::Color32,
+    /// Couleur de fond de la zone de rendu.
     pub background_color: egui::Color32,
+    /// Espacement des lignes (pixels, avant zoom).
     pub step_px: f32,
+    /// Nombre de lignes de part et d'autre du centre.
     pub half_lines: i32,
 }
 
@@ -27,16 +41,50 @@ impl Default for GridStyle {
     }
 }
 
-/// Moteur de rendu 3D : combine la caméra orbitale et l'affichage de la scène.
-pub struct Engine3D {
-    pub camera: OrbitCamera,
-    pub grid: GridStyle,
+impl GridStyle {
+    /// Change la couleur des lignes de la grille.
+    #[must_use]
+    pub fn with_line_color(mut self, color: egui::Color32) -> Self {
+        self.line_color = color;
+        self
+    }
+
+    /// Change la couleur de la ligne de sol.
+    #[must_use]
+    pub fn with_ground_color(mut self, color: egui::Color32) -> Self {
+        self.ground_color = color;
+        self
+    }
+
+    /// Change la couleur de fond.
+    #[must_use]
+    pub fn with_background_color(mut self, color: egui::Color32) -> Self {
+        self.background_color = color;
+        self
+    }
+
+    /// Change l'espacement des lignes (pixels, avant zoom).
+    #[must_use]
+    pub fn with_step_px(mut self, step_px: f32) -> Self {
+        self.step_px = step_px;
+        self
+    }
+
+    /// Change le nombre de lignes de part et d'autre du centre.
+    #[must_use]
+    pub fn with_half_lines(mut self, half_lines: i32) -> Self {
+        self.half_lines = half_lines;
+        self
+    }
 }
 
-impl Default for Engine3D {
-    fn default() -> Self {
-        Self { camera: OrbitCamera::default(), grid: GridStyle::default() }
-    }
+/// Moteur de rendu 3D : combine la caméra orbitale et l'affichage de la scène.
+#[derive(Default)]
+pub struct Engine3D {
+    /// Caméra orbitale (angle, zoom, panoramique).
+    pub camera: OrbitCamera,
+    /// Apparence de la grille au sol.
+    pub grid: GridStyle,
 }
 
 impl Engine3D {

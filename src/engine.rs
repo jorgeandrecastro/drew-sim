@@ -2,9 +2,8 @@
 //! draws the ground/grid, then delegates scene drawing to the caller.
 
 use crate::camera::OrbitCamera;
-use crate::render::Render3D;
+use crate::render::{Render3D, BASE_SCALE};
 use eframe::egui;
-
 /// Appearance options for the ground grid.
 ///
 /// Marked `#[non_exhaustive]`: new fields may be added without breaking
@@ -89,8 +88,8 @@ pub struct Engine3D {
 
 impl Engine3D {
     /// Allocates the rendering area, updates the camera from user input, draws
-    /// the background/grid, then calls `draw_callback` with a ready-to-use
-    /// rendering context for drawing the scene.
+    /// the background and the 3D ground grid, then calls `draw_callback` with
+    /// a ready-to-use rendering context.
     pub fn render<F>(&mut self, ui: &mut egui::Ui, draw_callback: F)
     where
         F: FnOnce(&Render3D),
@@ -102,32 +101,31 @@ impl Engine3D {
         painter.rect_filled(rect, 0.0, self.grid.background_color);
 
         let center = rect.center() + self.camera.pan_offset;
-        let ground_y = center.y + (150.0 * self.camera.zoom);
-        let grid_step = self.grid.step_px * self.camera.zoom;
-
-        painter.line_segment(
-            [egui::pos2(rect.min.x, ground_y), egui::pos2(rect.max.x, ground_y)],
-            egui::Stroke::new(2.0, self.grid.ground_color),
-        );
-
-        for i in -self.grid.half_lines..=self.grid.half_lines {
-            let offset = i as f32 * grid_step + (self.camera.orbit.sin() * 40.0 * self.camera.zoom);
-            let start_x = center.x + offset;
-            if start_x >= rect.min.x && start_x <= rect.max.x {
-                painter.line_segment(
-                    [egui::pos2(start_x, ground_y), egui::pos2(start_x + (offset * 0.5), rect.max.y)],
-                    egui::Stroke::new(1.0, self.grid.line_color),
-                );
-            }
-        }
-
         let render_ctx = Render3D {
             painter: &painter,
             center,
-            ground_y,
+            ground_y: center.y + 150.0 * self.camera.zoom,
             camera_orbit: self.camera.orbit,
+            camera_elevation: self.camera.elevation,
             zoom: self.camera.zoom,
+            perspective: self.camera.perspective,
+            camera_distance: self.camera.distance,
         };
+
+        // Real 3D ground grid on the y = 0 plane (step_px is converted to world units).
+        let step = self.grid.step_px / BASE_SCALE;
+        let n = self.grid.half_lines;
+        let ext = n as f32 * step;
+        for i in -n..=n {
+            let t = i as f32 * step;
+            let stroke = if i == 0 {
+                egui::Stroke::new(2.0, self.grid.ground_color)
+            } else {
+                egui::Stroke::new(1.0, self.grid.line_color)
+            };
+            render_ctx.draw_line([t, 0.0, -ext], [t, 0.0, ext], stroke);
+            render_ctx.draw_line([-ext, 0.0, t], [ext, 0.0, t], stroke);
+        }
 
         draw_callback(&render_ctx);
     }

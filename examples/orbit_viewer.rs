@@ -8,9 +8,12 @@
 //! cargo run --example orbit_viewer --release -- path/to/model.stl   # `stl` feature
 //! ```
 //!
-//! It also serves as a manual check for 0.4 features: attitude interpolation
-//! using quaternions (`Rotation3D::slerp`), quaternion display (`Quat`), unique
-//! edges (`Mesh3D::edges`), `OrbitCamera::reset`, and `GridStyle::with_*`.
+//! It also serves as a manual check for the camera and rendering features:
+//! full orbit (azimuth + elevation), perspective/orthographic projection,
+//! solid flat-shaded faces (`Render3D::draw_mesh_solid`), attitude
+//! interpolation using quaternions (`Rotation3D::slerp`), quaternion display
+//! (`Quat`), unique edges (`Mesh3D::edges`), `OrbitCamera::reset`, and
+//! `GridStyle::with_*`.
 //!
 //! Written for eframe/egui 0.35: `App::ui(&mut self, ui: &mut egui::Ui, ...)`
 //! replaces the former `App::update(&mut self, ctx: &egui::Context, ...)`, and
@@ -37,6 +40,8 @@ struct OrbitViewerApp {
     /// `false`: animate Euler angles directly; `true`: use spherical
     /// interpolation (slerp) between two key attitudes.
     slerp_attitude: bool,
+    /// `true`: flat-shaded solid faces; `false`: wireframe.
+    solid: bool,
 }
 
 impl OrbitViewerApp {
@@ -55,6 +60,7 @@ impl OrbitViewerApp {
             orbit_radius: 2.0,
             paused: false,
             slerp_attitude: false,
+            solid: true,
         }
     }
 
@@ -138,6 +144,13 @@ impl eframe::App for OrbitViewerApp {
                 ui.add(egui::Slider::new(&mut self.orbit_radius, 0.5..=4.0).text("Radius"));
                 ui.checkbox(&mut self.slerp_attitude, "Slerp attitude (quaternions)");
 
+                ui.separator();
+
+                // Rendering options
+                ui.label("Rendering:");
+                ui.checkbox(&mut self.solid, "Solid faces");
+                ui.checkbox(&mut self.engine.camera.perspective, "Perspective");
+
                 ui.horizontal(|ui| {
                     if ui.button("🗑️ Clear trail").clicked() {
                         self.trail.clear();
@@ -177,7 +190,7 @@ impl eframe::App for OrbitViewerApp {
 
                 ui.separator();
                 ui.collapsing("🖱️ Camera controls", |ui| {
-                    ui.small("• Left-click and drag: orbit");
+                    ui.small("• Left-click and drag: orbit + tilt");
                     ui.small("• Scroll wheel: zoom");
                     ui.small("• Right/middle-click and drag: pan");
                 });
@@ -193,13 +206,13 @@ impl eframe::App for OrbitViewerApp {
             );
 
             self.engine.render(ui, |r| {
-                // Render the wireframe mesh
-                r.draw_mesh(
-                    &self.mesh,
-                    self.state.position,
-                    self.state.rotation,
-                    egui::Color32::from_rgb(100, 200, 255),
-                );
+                // Render the mesh (solid or wireframe)
+                let color = egui::Color32::from_rgb(100, 200, 255);
+                if self.solid {
+                    r.draw_mesh_solid(&self.mesh, self.state.position, self.state.rotation, color);
+                } else {
+                    r.draw_mesh(&self.mesh, self.state.position, self.state.rotation, color);
+                }
 
                 // XYZ axes on the object
                 r.draw_axes(self.state.position, self.state.rotation, 1.2);

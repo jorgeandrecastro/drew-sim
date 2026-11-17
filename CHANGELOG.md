@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.0]
+
+### Added
+- `OrbitCamera::{elevation, perspective, distance}`: full orbit (tilt) and optional perspective projection
+- `Render3D::{draw_mesh_solid, draw_line, world_to_view, project_view}`: flat-shaded solid faces (painter's algorithm), 3D line, near-plane clipping
+
+### Changed
+- **BREAKING**: `OrbitCamera` is `#[non_exhaustive]`; `Render3D` has new fields (`camera_elevation`, `perspective`, `camera_distance`)
+- The ground grid is now a real 3D grid on y = 0
+
 ## [0.4.1]
 
 - Migrated the documentation, README, and changelog to English.

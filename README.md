@@ -13,23 +13,23 @@ orientation sensors.
 
 ```toml
 [dependencies]
-drew-sim = "0.4"
+drew-sim = "0.5"
 ```
 
 The `stl` feature (for loading `.stl` files) is enabled by default.
 To disable it:
 
 ```toml
-drew-sim = { version = "0.4", default-features = false }
+drew-sim = { version = "0.5", default-features = false }
 ```
 
 ## Mouse controls (3D rendering area)
 
-| Action                                   | Effect          |
-|------------------------------------------|-----------------|
-| Left-click and drag                     | Orbit the camera |
-| Scroll wheel                             | Zoom            |
-| Right-click **or** middle-click and drag | Pan             |
+| Action                                   | Effect                  |
+|------------------------------------------|-------------------------|
+| Left-click and drag                      | Orbit and tilt the camera |
+| Scroll wheel                             | Zoom                    |
+| Right-click **or** middle-click and drag | Pan                     |
 
 These controls are handled automatically by `Engine3D::render`; no application
 code is needed. There is no on-screen camera widget: all camera interaction
@@ -50,8 +50,10 @@ initial position.
   the same rotation; compare the effect on points rather than the angles.
 - Quaternions (`Quat`) use the same convention:
   `Quat::from_euler(r)` is equivalent to `Ry(yaw) * Rx(pitch) * Rz(roll)`.
-- Projection is **orthographic**, with horizontal orbit only (no perspective
-  or camera tilt).
+- The camera orbits fully: **azimuth** (`orbit`) around the vertical axis and
+  **elevation** (`elevation`, clamped just below ±90°). The projection is
+  **perspective** by default; set `engine.camera.perspective = false` for an
+  orthographic projection.
 
 ## Useful functionality
 
@@ -59,22 +61,32 @@ initial position.
 
 | Function | Role |
 |---|---|
-| `Engine3D::default()` | Camera with `orbit=0.5`, `zoom=1.0`, and the default grid |
-| `engine.render(ui, \|r\| { ... })` | Allocates the drawing area, applies mouse input to the camera, draws the ground grid, then calls the closure with a ready-to-use `Render3D` |
+| `Engine3D::default()` | Perspective camera with `orbit=0.5`, `elevation=0.35`, `zoom=1.0`, and the default grid |
+| `engine.render(ui, \|r\| { ... })` | Allocates the drawing area, applies mouse input to the camera, draws the 3D ground grid (plane y = 0), then calls the closure with a ready-to-use `Render3D` |
 | `engine.camera` | Direct access to the `OrbitCamera` (e.g. to set an initial angle) |
-| `engine.camera.reset()` | Resets the orbit, zoom, and pan to their default values |
+| `engine.camera.reset()` | Resets the orbit, elevation, zoom, and pan to their default values (the projection mode is kept) |
+| `engine.camera.perspective` | `true`: perspective (default); `false`: orthographic |
+| `engine.camera.distance` | Camera distance from the origin, in world units (perspective only) |
 | `engine.grid` | `GridStyle`: ground-grid colors and spacing |
 | `GridStyle::default().with_step_px(30.0).with_half_lines(20)` | Customizes the grid (`with_line_color`, `with_ground_color`, `with_background_color`, `with_step_px`, `with_half_lines`). `GridStyle` is `#[non_exhaustive]`; start with `default()` |
+
+`OrbitCamera` is `#[non_exhaustive]`: start with `OrbitCamera::default()` and
+then modify its public fields (`orbit`, `elevation`, `zoom`, `pan_offset`,
+`perspective`, `distance`).
 
 ### `Render3D`: drawing primitives (`src/render.rs`), used inside the `render(...)` closure
 
 | Function | Role |
 |---|---|
-| `r.world_to_screen(pos)` | Projects a 3D point to the screen (useful for drawing things beyond the primitives below) |
+| `r.world_to_screen(pos)` | Projects a 3D point to the screen (points behind the camera are clamped to the near plane) |
+| `r.world_to_view(pos)` | World point to view space (x right, y up, z = depth) |
+| `r.project_view(v)` | Projects a view-space point; returns `None` if it is behind the camera |
+| `r.draw_line(a, b, stroke)` | 3D line segment between two world points (clipped against the near plane) |
 | `r.draw_mesh(&mesh, position, rotation, color)` | Wireframe mesh (each vertex is projected once, and shared edges are drawn once) |
 | `r.draw_mesh_with_stroke(&mesh, position, rotation, stroke)` | Same, with a full `egui::Stroke` (including line width) |
+| `r.draw_mesh_solid(&mesh, position, rotation, color)` | Flat-shaded solid faces (painter's algorithm: triangles sorted back to front, two-sided lighting). Without a z-buffer, strongly concave or interpenetrating objects may show sorting artifacts |
 | `r.draw_axes(position, rotation, length)` | XYZ axes (red = X, green = Y, blue = Z) |
-| `r.draw_trail(&points, color)` | Polyline connecting a history of positions |
+| `r.draw_trail(&points, color)` | Polyline connecting a history of positions (parts behind the camera are cut) |
 | `r.draw_chart(rect, &values, min, max, color)` | 2D chart (value curve), independent of the 3D camera, for displaying a sensor overlay |
 
 ### `Mesh3D` (`src/mesh.rs`)
@@ -162,7 +174,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ui, |ui| {
             self.engine.render(ui, |r| {
-                r.draw_mesh(&self.mesh, self.state.position, self.state.rotation, egui::Color32::WHITE);
+                r.draw_mesh_solid(&self.mesh, self.state.position, self.state.rotation, egui::Color32::LIGHT_BLUE);
                 r.draw_axes(self.state.position, self.state.rotation, 1.5);
             });
         });
@@ -200,34 +212,40 @@ using them (see [Conventions](#conventions)).
 
 ## Full example
 
-A richer example (animated cube, control panel, trail, and altitude chart) is
-available:
+A richer example (animated cube, control panel, solid/wireframe toggle,
+perspective toggle, trail, and altitude chart) is available:
 
 ```bash
 cargo run --example orbit_viewer --release
 ```
 
-## Migration from 0.3 to 0.4
+## Migration from 0.4 to 0.5
 
-- `Rotation3D::rotate_point` and `compose` now take `self` (which is `Copy`)
-  instead of `&self`: calls like `r.rotate_point(p)` are unchanged; only calls
-  written as `Rotation3D::rotate_point(&r, p)` need to drop the `&`.
-- `Rotation3D::compose` returns **normalized** angles (see
-  [Conventions](#conventions)).
-- `Mesh3D` now has a private field (the edge cache), so it can no longer be
-  constructed as `Mesh3D { vertices, triangles }` outside the crate. Use
-  `Mesh3D::from_raw`, `unit_cube`, or `from_stl_file`.
-- `GridStyle` and `MeshError` are `#[non_exhaustive]`: start with
-  `GridStyle::default()` and then use `with_*`, and include a `_ =>` arm in
-  `match` expressions over `MeshError`.
+- `OrbitCamera` is `#[non_exhaustive]` and has new fields (`elevation`,
+  `perspective`, `distance`): start with `OrbitCamera::default()` instead of a
+  struct literal.
+- `Render3D` has new public fields (`camera_elevation`, `perspective`,
+  `camera_distance`). This only affects code that builds a `Render3D` manually;
+  `Engine3D::render` fills them in for you.
+- The default view is now **perspective** with a slight downward tilt. To get
+  the previous flat look, set `engine.camera.perspective = false` and
+  `engine.camera.elevation = 0.0`.
+- The ground grid is now a real 3D grid on the y = 0 plane. `GridStyle::step_px`
+  is converted to world units (`step_px / 50`).
+- `world_to_screen` now takes the elevation and the projection mode into
+  account.
 
 ## Roadmap
 
-- [ ] Solid-face rendering / simple z-buffer (currently wireframe)
-- [ ] Perspective camera with tilt (currently orthographic, horizontal orbit)
-- [ ] Import other mesh formats (OBJ)
+- [x] Solid-face rendering (flat shading, painter's algorithm)
+- [x] Perspective camera with tilt (full orbit)
+- [ ] True z-buffer (correct occlusion for concave or interpenetrating meshes)
+- [ ] Import other mesh formats (OBJ, glTF)
+- [ ] Sharp-edge (crease angle) filter for dense wireframes
+- [ ] Pose / transform tree, URDF loading, and `JointState` input (articulated robots)
+- [ ] Telemetry frame conversions (NED, ENU, ROS REP-103)
 - [ ] Optional HUD showing mouse controls and camera state
-- [ ] Optional `glam` feature (`Quat`/`Vec3` conversions)
+- [ ] Optional `glam` / `mint` features (`Quat`/`Vec3` conversions)
 - [ ] CI (fmt, clippy, tests, docs) and declared MSRV
 
 ## License

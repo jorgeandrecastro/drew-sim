@@ -1,63 +1,73 @@
-//! Orbital camera and user input handling (zoom, pan, orbit).
+//! Orbital camera: azimuth, elevation, zoom, pan, and optional perspective.
 
 use eframe::egui;
+use std::f32::consts::FRAC_PI_2;
 
-/// Default zoom bounds.
-pub const DEFAULT_ZOOM_RANGE: (f32, f32) = (0.2, 5.0);
+/// Maximum elevation (just below ±90° to avoid a degenerate view).
+const MAX_ELEVATION: f32 = FRAC_PI_2 - 0.05;
 
-/// Orbital camera state: orbit angle, zoom, and pan offset.
+/// Orbital camera controlled with the mouse.
+///
+/// Marked `#[non_exhaustive]`: start with `default()`.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct OrbitCamera {
-    /// Horizontal orbit angle (radians) around the vertical axis.
+    /// Azimuth (radians) around the vertical axis.
     pub orbit: f32,
-    /// Zoom factor, clamped to `zoom_range`.
+    /// Elevation (radians): 0 = horizontal view, > 0 = seen from above.
+    pub elevation: f32,
+    /// Zoom factor.
     pub zoom: f32,
-    /// Pan offset (screen pixels).
+    /// Screen-space pan offset (pixels).
     pub pan_offset: egui::Vec2,
-    /// Zoom bounds `(min, max)`.
-    pub zoom_range: (f32, f32),
+    /// `true`: perspective projection; `false`: orthographic.
+    pub perspective: bool,
+    /// Camera distance from the scene origin (world units, perspective only).
+    pub distance: f32,
 }
 
 impl Default for OrbitCamera {
     fn default() -> Self {
         Self {
             orbit: 0.5,
+            elevation: 0.35,
             zoom: 1.0,
             pan_offset: egui::Vec2::ZERO,
-            zoom_range: DEFAULT_ZOOM_RANGE,
+            perspective: true,
+            distance: 10.0,
         }
     }
 }
 
 impl OrbitCamera {
-    /// Resets the orbit, zoom, and pan to their default values
-    /// (custom zoom bounds are preserved).
+    /// Restores orbit, elevation, zoom, and pan to their default values
+    /// (the projection mode is kept).
     pub fn reset(&mut self) {
-        *self = Self { zoom_range: self.zoom_range, ..Self::default() };
+        let perspective = self.perspective;
+        *self = Self::default();
+        self.perspective = perspective;
     }
 
-    /// Updates the camera from the egui interaction response for the rendering
-    /// area (scroll wheel = zoom, right/middle-click and drag = pan,
-    /// left-click and drag = orbit).
+    /// Applies mouse input: left-drag = orbit + tilt, scroll = zoom,
+    /// right/middle-drag = pan.
     pub fn handle_input(&mut self, ui: &egui::Ui, response: &egui::Response) {
-        if response.hovered() {
-            let scroll_delta = ui.input(|i| i.smooth_scroll_delta.y);
-            if scroll_delta != 0.0 {
-                self.zoom = (self.zoom + scroll_delta * 0.002)
-                    .clamp(self.zoom_range.0, self.zoom_range.1);
-            }
+        let delta = response.drag_delta();
+
+        if response.dragged_by(egui::PointerButton::Primary) {
+            self.orbit += delta.x * 0.01;
+            self.elevation = (self.elevation + delta.y * 0.01).clamp(-MAX_ELEVATION, MAX_ELEVATION);
         }
 
-        if response.dragged() {
-            let delta = response.drag_delta();
-            let panning = ui.input(|i| {
-                i.pointer.button_down(egui::PointerButton::Secondary)
-                    || i.pointer.button_down(egui::PointerButton::Middle)
-            });
-            if panning {
-                self.pan_offset += delta;
-            } else {
-                self.orbit += delta.x * 0.01;
+        if response.dragged_by(egui::PointerButton::Secondary)
+            || response.dragged_by(egui::PointerButton::Middle)
+        {
+            self.pan_offset += delta;
+        }
+
+        if response.hovered() {
+            let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+            if scroll != 0.0 {
+                self.zoom = (self.zoom * (scroll * 0.0015).exp()).clamp(0.1, 20.0);
             }
         }
     }

@@ -1,23 +1,24 @@
-//! Quaternions unitaires : format natif des IMU et autopilotes
-//! (PX4, ArduPilot, BNO055…), sans gimbal lock.
+//! Unit quaternions: the native format for IMUs and autopilots
+//! (PX4, ArduPilot, BNO055, etc.), with no gimbal lock.
 //!
-//! Même convention que [`Rotation3D`] : repère main droite, et
-//! `Quat::from_euler(r)` représente exactement `Ry(yaw) * Rx(pitch) * Rz(roll)`.
+//! Uses the same conventions as [`Rotation3D`]: a right-handed coordinate
+//! system, where `Quat::from_euler(r)` represents exactly
+//! `Ry(yaw) * Rx(pitch) * Rz(roll)`.
 
 use crate::math::{mat3_mul_vec, normalize, Mat3, Rotation3D, Vec3};
 use std::ops::Mul;
 
-/// Quaternion `w + xi + yj + zk`. Les fonctions de rotation supposent
-/// (ou imposent) une norme de 1.
+/// Quaternion `w + xi + yj + zk`. Rotation functions assume (or enforce) a
+/// unit norm.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Quat {
-    /// Partie réelle.
+    /// Real part.
     pub w: f32,
-    /// Composante i.
+    /// i component.
     pub x: f32,
-    /// Composante j.
+    /// j component.
     pub y: f32,
-    /// Composante k.
+    /// k component.
     pub z: f32,
 }
 
@@ -28,17 +29,17 @@ impl Default for Quat {
 }
 
 impl Quat {
-    /// Rotation nulle.
+    /// Zero rotation.
     pub const IDENTITY: Self = Self { w: 1.0, x: 0.0, y: 0.0, z: 0.0 };
 
-    /// Construit un quaternion (non normalisé) à partir de ses composantes.
+    /// Creates a quaternion (not normalized) from its components.
     #[must_use]
     #[inline]
     pub const fn new(w: f32, x: f32, y: f32, z: f32) -> Self {
         Self { w, x, y, z }
     }
 
-    /// Rotation de `angle` radians autour de `axis` (l'axe est normalisé).
+    /// Rotation of `angle` radians around `axis` (the axis is normalized).
     #[must_use]
     pub fn from_axis_angle(axis: Vec3, angle: f32) -> Self {
         let a = normalize(axis);
@@ -46,7 +47,7 @@ impl Quat {
         Self { w: c, x: a[0] * s, y: a[1] * s, z: a[2] * s }
     }
 
-    /// Convertit des angles d'Euler (`Ry(yaw) * Rx(pitch) * Rz(roll)`).
+    /// Converts Euler angles (`Ry(yaw) * Rx(pitch) * Rz(roll)`).
     #[must_use]
     pub fn from_euler(r: Rotation3D) -> Self {
         let qz = Self::from_axis_angle([0.0, 0.0, 1.0], r.roll);
@@ -55,30 +56,29 @@ impl Quat {
         qy * qx * qz
     }
 
-    /// Convertit en angles d'Euler normalisés (voir [`Rotation3D::from_matrix`]
-    /// pour le comportement au gimbal lock).
+    /// Converts to normalized Euler angles (see [`Rotation3D::from_matrix`]
+    /// for behavior at gimbal lock).
     #[must_use]
     pub fn to_euler(self) -> Rotation3D {
         Rotation3D::from_matrix(self.to_matrix())
     }
 
-    /// Produit scalaire 4D.
+    /// 4D dot product.
     #[must_use]
     #[inline]
     pub fn dot(self, o: Self) -> f32 {
         self.w * o.w + self.x * o.x + self.y * o.y + self.z * o.z
     }
 
-    /// Norme du quaternion.
+    /// Quaternion norm.
     #[must_use]
     #[inline]
     pub fn norm(self) -> f32 {
         self.dot(self).sqrt()
     }
 
-    /// Renvoie le quaternion de norme 1 (ou l'identité si la norme est
-    /// quasi nulle). À appeler régulièrement si l'on intègre des vitesses
-    /// angulaires, pour éviter la dérive.
+    /// Returns the unit quaternion (or the identity if the norm is near zero).
+    /// Call regularly when integrating angular velocities to avoid drift.
     #[must_use]
     pub fn normalize(self) -> Self {
         let n = self.norm();
@@ -90,14 +90,14 @@ impl Quat {
         }
     }
 
-    /// Conjugué (`w, -x, -y, -z`) : l'inverse pour un quaternion unitaire.
+    /// Conjugate (`w, -x, -y, -z`): the inverse of a unit quaternion.
     #[must_use]
     #[inline]
     pub fn conjugate(self) -> Self {
         Self { w: self.w, x: -self.x, y: -self.y, z: -self.z }
     }
 
-    /// Inverse (`conjugé / norme²`). Identité si la norme est quasi nulle.
+    /// Inverse (`conjugate / norm²`). Returns the identity if the norm is near zero.
     #[must_use]
     pub fn inverse(self) -> Self {
         let n2 = self.dot(self);
@@ -110,15 +110,15 @@ impl Quat {
         }
     }
 
-    /// Compose deux rotations : `self` d'abord, puis `other`
-    /// (même sémantique que [`Rotation3D::compose`]).
+    /// Composes two rotations: `self` first, then `other` (same semantics as
+    /// [`Rotation3D::compose`]).
     #[must_use]
     #[inline]
     pub fn compose(self, other: Self) -> Self {
         other * self
     }
 
-    /// Matrice de rotation 3x3 (le quaternion est normalisé au préalable).
+    /// 3x3 rotation matrix (the quaternion is normalized first).
     #[must_use]
     pub fn to_matrix(self) -> Mat3 {
         let Self { w, x, y, z } = self.normalize();
@@ -129,15 +129,15 @@ impl Quat {
         ]
     }
 
-    /// Applique la rotation à un point.
+    /// Applies the rotation to a point.
     #[must_use]
     pub fn rotate_point(self, p: Vec3) -> Vec3 {
         mat3_mul_vec(&self.to_matrix(), p)
     }
 
-    /// Interpolation sphérique (t = 0 → `self`, t = 1 → `other`),
-    /// par le chemin le plus court. Repli sur une interpolation linéaire
-    /// normalisée quand les deux quaternions sont quasi identiques.
+    /// Spherical interpolation (t = 0 → `self`, t = 1 → `other`) along the
+    /// shortest path. Falls back to normalized linear interpolation when the
+    /// two quaternions are nearly identical.
     #[must_use]
     pub fn slerp(self, other: Self, t: f32) -> Self {
         let mut b = other;
@@ -163,8 +163,8 @@ impl Quat {
     }
 }
 
-/// Produit de Hamilton : `a * b` applique `b` d'abord, puis `a`
-/// (comme le produit de matrices).
+/// Hamilton product: `a * b` applies `b` first, then `a` (like matrix
+/// multiplication).
 impl Mul for Quat {
     type Output = Quat;
     fn mul(self, o: Quat) -> Quat {
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn slerp_takes_shortest_path() {
         let a = Quat::IDENTITY;
-        let b = Quat::new(-1.0, 0.0, 0.0, 0.0); // même rotation, signe opposé
+        let b = Quat::new(-1.0, 0.0, 0.0, 0.0); // Same rotation, opposite sign.
         let mid = a.slerp(b, 0.5);
         for p in PROBES {
             close(mid.rotate_point(p), p, 1e-5);

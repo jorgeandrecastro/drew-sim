@@ -1,15 +1,15 @@
-//! Moteur de rendu haut niveau : alloue la zone de dessin, gère la caméra,
-//! dessine le sol/la grille, puis délègue le dessin de la scène à l'appelant.
+//! High-level rendering engine: allocates the drawing area, handles the camera,
+//! draws the ground/grid, then delegates scene drawing to the caller.
 
 use crate::camera::OrbitCamera;
 use crate::render::Render3D;
 use eframe::egui;
 
-/// Options d'apparence de la grille au sol.
+/// Appearance options for the ground grid.
 ///
-/// Marquée `#[non_exhaustive]` : de nouveaux champs pourront être ajoutés
-/// sans casser la compatibilité. Hors de la crate, pars de `default()` puis
-/// utilise les méthodes `with_*` ou modifie les champs :
+/// Marked `#[non_exhaustive]`: new fields may be added without breaking
+/// compatibility. Outside the crate, start with `default()`, then use the
+/// `with_*` methods or modify the fields:
 ///
 /// ```ignore
 /// let grid = GridStyle::default().with_step_px(30.0).with_half_lines(20);
@@ -17,15 +17,15 @@ use eframe::egui;
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub struct GridStyle {
-    /// Couleur des lignes de la grille.
+    /// Grid-line color.
     pub line_color: egui::Color32,
-    /// Couleur de la ligne de sol.
+    /// Ground-line color.
     pub ground_color: egui::Color32,
-    /// Couleur de fond de la zone de rendu.
+    /// Background color of the rendering area.
     pub background_color: egui::Color32,
-    /// Espacement des lignes (pixels, avant zoom).
+    /// Grid-line spacing (pixels, before zoom).
     pub step_px: f32,
-    /// Nombre de lignes de part et d'autre du centre.
+    /// Number of grid lines on each side of the center.
     pub half_lines: i32,
 }
 
@@ -42,35 +42,35 @@ impl Default for GridStyle {
 }
 
 impl GridStyle {
-    /// Change la couleur des lignes de la grille.
+    /// Sets the grid-line color.
     #[must_use]
     pub fn with_line_color(mut self, color: egui::Color32) -> Self {
         self.line_color = color;
         self
     }
 
-    /// Change la couleur de la ligne de sol.
+    /// Sets the ground-line color.
     #[must_use]
     pub fn with_ground_color(mut self, color: egui::Color32) -> Self {
         self.ground_color = color;
         self
     }
 
-    /// Change la couleur de fond.
+    /// Sets the background color.
     #[must_use]
     pub fn with_background_color(mut self, color: egui::Color32) -> Self {
         self.background_color = color;
         self
     }
 
-    /// Change l'espacement des lignes (pixels, avant zoom).
+    /// Sets the grid-line spacing (pixels, before zoom).
     #[must_use]
     pub fn with_step_px(mut self, step_px: f32) -> Self {
         self.step_px = step_px;
         self
     }
 
-    /// Change le nombre de lignes de part et d'autre du centre.
+    /// Sets the number of grid lines on each side of the center.
     #[must_use]
     pub fn with_half_lines(mut self, half_lines: i32) -> Self {
         self.half_lines = half_lines;
@@ -78,19 +78,19 @@ impl GridStyle {
     }
 }
 
-/// Moteur de rendu 3D : combine la caméra orbitale et l'affichage de la scène.
+/// 3D rendering engine: combines the orbital camera and scene rendering.
 #[derive(Default)]
 pub struct Engine3D {
-    /// Caméra orbitale (angle, zoom, panoramique).
+    /// Orbital camera (angle, zoom, and pan).
     pub camera: OrbitCamera,
-    /// Apparence de la grille au sol.
+    /// Ground-grid appearance.
     pub grid: GridStyle,
 }
 
 impl Engine3D {
-    /// Alloue la zone de rendu, met à jour la caméra selon l'entrée utilisateur,
-    /// dessine l'arrière-plan/la grille, puis appelle `draw_callback` avec le
-    /// contexte de rendu prêt à l'emploi pour dessiner la scène.
+    /// Allocates the rendering area, updates the camera from user input, draws
+    /// the background/grid, then calls `draw_callback` with a ready-to-use
+    /// rendering context for drawing the scene.
     pub fn render<F>(&mut self, ui: &mut egui::Ui, draw_callback: F)
     where
         F: FnOnce(&Render3D),

@@ -1,20 +1,20 @@
-//! Caméra orbitale et gestion de l'entrée utilisateur (zoom, pan, orbite).
+//! Orbital camera and user input handling (zoom, pan, orbit).
 
 use eframe::egui;
 
-/// Bornes de zoom par défaut.
+/// Default zoom bounds.
 pub const DEFAULT_ZOOM_RANGE: (f32, f32) = (0.2, 5.0);
 
-/// État de la caméra orbitale : angle d'orbite, zoom, décalage de panoramique.
+/// Orbital camera state: orbit angle, zoom, and pan offset.
 #[derive(Clone, Copy, Debug)]
 pub struct OrbitCamera {
-    /// Angle d'orbite horizontal (radians) autour de l'axe vertical.
+    /// Horizontal orbit angle (radians) around the vertical axis.
     pub orbit: f32,
-    /// Facteur de zoom, borné par `zoom_range`.
+    /// Zoom factor, clamped to `zoom_range`.
     pub zoom: f32,
-    /// Décalage de panoramique (pixels écran).
+    /// Pan offset (screen pixels).
     pub pan_offset: egui::Vec2,
-    /// Bornes `(min, max)` du zoom.
+    /// Zoom bounds `(min, max)`.
     pub zoom_range: (f32, f32),
 }
 
@@ -30,15 +30,15 @@ impl Default for OrbitCamera {
 }
 
 impl OrbitCamera {
-    /// Remet l'orbite, le zoom et le panoramique à leurs valeurs par défaut
-    /// (les bornes de zoom personnalisées sont conservées).
+    /// Resets the orbit, zoom, and pan to their default values
+    /// (custom zoom bounds are preserved).
     pub fn reset(&mut self) {
         *self = Self { zoom_range: self.zoom_range, ..Self::default() };
     }
 
-    /// Met à jour la caméra à partir de la réponse d'interaction egui pour
-    /// la zone de rendu (molette = zoom, clic droit/milieu + glisser = pan,
-    /// clic gauche + glisser = orbite).
+    /// Updates the camera from the egui interaction response for the rendering
+    /// area (scroll wheel = zoom, right/middle-click and drag = pan,
+    /// left-click and drag = orbit).
     pub fn handle_input(&mut self, ui: &egui::Ui, response: &egui::Response) {
         if response.hovered() {
             let scroll_delta = ui.input(|i| i.smooth_scroll_delta.y);

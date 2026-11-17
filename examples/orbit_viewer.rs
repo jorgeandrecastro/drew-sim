@@ -1,23 +1,21 @@
-//! Exemple : visualiseur orbital affichant un cube animé, son repère XYZ,
-//! sa trajectoire et un petit graphe de télémétrie (altitude simulée).
+//! Example: an orbital viewer showing an animated cube, its XYZ axes,
+//! its trail, and a small telemetry chart (simulated altitude).
 //!
-//! Lancer avec :
+//! Run with:
 //!
 //! ```text
 //! cargo run --example orbit_viewer --release
-//! cargo run --example orbit_viewer --release -- chemin/vers/modele.stl   # feature `stl`
+//! cargo run --example orbit_viewer --release -- path/to/model.stl   # `stl` feature
 //! ```
 //!
-//! Sert aussi de test manuel pour les nouveautés de la 0.4 : attitude par
-//! interpolation de quaternions (`Rotation3D::slerp`), affichage du quaternion
-//! (`Quat`), arêtes uniques (`Mesh3D::edges`), `OrbitCamera::reset`,
-//! `GridStyle::with_*`.
+//! It also serves as a manual check for 0.4 features: attitude interpolation
+//! using quaternions (`Rotation3D::slerp`), quaternion display (`Quat`), unique
+//! edges (`Mesh3D::edges`), `OrbitCamera::reset`, and `GridStyle::with_*`.
 //!
-//! Écrit pour eframe/egui 0.35 : `App::ui(&mut self, ui: &mut egui::Ui, ...)`
-//! remplace l'ancien `App::update(&mut self, ctx: &egui::Context, ...)`, et
-//! les panels s'affichent maintenant via `.show(ui, ...)` plutôt que
-//! `.show(ctx, ...)`. `SidePanel` a été remplacé par `Panel` (unifié avec
-//! `TopBottomPanel`).
+//! Written for eframe/egui 0.35: `App::ui(&mut self, ui: &mut egui::Ui, ...)`
+//! replaces the former `App::update(&mut self, ctx: &egui::Context, ...)`, and
+//! panels are now displayed with `.show(ui, ...)` rather than `.show(ctx, ...)`.
+//! `SidePanel` has been replaced by `Panel` (unified with `TopBottomPanel`).
 
 use drew_sim::egui;
 use drew_sim::{Engine3D, GridStyle, Mesh3D, Quat, Rotation3D, TelemetryState, TrailBuffer};
@@ -32,12 +30,12 @@ struct OrbitViewerApp {
     altitude_history: Vec<f32>,
     time: f32,
 
-    // Paramètres configurables en direct dans le panneau
+    // Parameters that can be adjusted live in the panel.
     orbit_speed: f32,
     orbit_radius: f32,
     paused: bool,
-    /// `false` : angles d'Euler animés directement ; `true` : interpolation
-    /// sphérique (slerp) entre deux attitudes clés.
+    /// `false`: animate Euler angles directly; `true`: use spherical
+    /// interpolation (slerp) between two key attitudes.
     slerp_attitude: bool,
 }
 
@@ -60,7 +58,7 @@ impl OrbitViewerApp {
         }
     }
 
-    /// Attitude à l'instant courant selon le mode choisi.
+    /// Attitude at the current time, according to the selected mode.
     fn attitude(&self) -> Rotation3D {
         let t = self.time;
         if self.slerp_attitude {
@@ -69,9 +67,9 @@ impl OrbitViewerApp {
             a.slerp(b, 0.5 + 0.5 * t.sin())
         } else {
             Rotation3D::new(
-                (t * 2.0).sin() * 0.2, // Léger roulis
-                (t * 1.5).cos() * 0.3, // Tangage
-                t * 0.5,               // Lacet continu
+                (t * 2.0).sin() * 0.2, // Slight roll
+                (t * 1.5).cos() * 0.3, // Pitch
+                t * 0.5,               // Continuous yaw
             )
         }
     }
@@ -82,10 +80,10 @@ fn load_mesh() -> Mesh3D {
     if let Some(path) = std::env::args().nth(1) {
         match Mesh3D::from_stl_file(&path) {
             Ok(mesh) => {
-                eprintln!("STL chargé : {path} ({} triangles)", mesh.triangle_count());
+                eprintln!("Loaded STL: {path} ({} triangles)", mesh.triangle_count());
                 return mesh;
             }
-            Err(e) => eprintln!("Impossible de charger {path} : {e} (cube par défaut)"),
+            Err(e) => eprintln!("Failed to load {path}: {e} (using default cube)"),
         }
     }
     Mesh3D::unit_cube(1.2)
@@ -100,12 +98,12 @@ impl eframe::App for OrbitViewerApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
 
-        // 1. Simulation physique / télémétrie
+        // 1. Physics simulation / telemetry
         if !self.paused {
-            let dt = ctx.input(|i| i.stable_dt).min(0.1); // Pas de temps fluide
+            let dt = ctx.input(|i| i.stable_dt).min(0.1); // Smooth time step
             self.time += dt * self.orbit_speed;
 
-            // Orbite circulaire avec oscillation verticale (altitude)
+            // Circular orbit with vertical oscillation (altitude)
             self.state.position = [
                 self.time.cos() * self.orbit_radius,
                 (self.time * 1.5).sin() * 0.6,
@@ -114,7 +112,7 @@ impl eframe::App for OrbitViewerApp {
 
             self.state.rotation = self.attitude();
 
-            // Mise à jour des historiques
+            // Update histories
             self.trail.push(self.state.position);
 
             self.altitude_history.push(self.state.position[1]);
@@ -124,36 +122,36 @@ impl eframe::App for OrbitViewerApp {
             }
         }
 
-        // 2. Panneau de contrôle latéral (IHM)
+        // 2. Side control panel (UI)
         egui::Panel::left("control_panel")
             .resizable(true)
             .default_size(260.0)
             .show(ui, |ui| {
                 ui.heading("🛰️ Orbit Viewer");
-                ui.small("Station de sol & Télémétrie");
+                ui.small("Ground Station & Telemetry");
                 ui.separator();
 
-                // Contrôles de simulation
-                ui.label("Contrôles de l'orbite :");
+                // Simulation controls
+                ui.label("Orbit controls:");
                 ui.checkbox(&mut self.paused, "Pause simulation");
-                ui.add(egui::Slider::new(&mut self.orbit_speed, 0.1..=3.0).text("Vitesse"));
-                ui.add(egui::Slider::new(&mut self.orbit_radius, 0.5..=4.0).text("Rayon"));
-                ui.checkbox(&mut self.slerp_attitude, "Attitude par slerp (quaternions)");
+                ui.add(egui::Slider::new(&mut self.orbit_speed, 0.1..=3.0).text("Speed"));
+                ui.add(egui::Slider::new(&mut self.orbit_radius, 0.5..=4.0).text("Radius"));
+                ui.checkbox(&mut self.slerp_attitude, "Slerp attitude (quaternions)");
 
                 ui.horizontal(|ui| {
-                    if ui.button("🗑️ Effacer la trajectoire").clicked() {
+                    if ui.button("🗑️ Clear trail").clicked() {
                         self.trail.clear();
                         self.altitude_history.clear();
                     }
-                    if ui.button("🎥 Reset caméra").clicked() {
+                    if ui.button("🎥 Reset camera").clicked() {
                         self.engine.camera.reset();
                     }
                 });
 
                 ui.separator();
 
-                // Telemetry Data Box
-                ui.label("Données en direct :");
+                // Telemetry data
+                ui.label("Live data:");
                 let q = Quat::from_euler(self.state.rotation);
                 egui::Frame::group(ui.style()).show(ui, |ui| {
                     ui.monospace(format!("Pos X: {:+.2} m", self.state.position[0]));
@@ -169,25 +167,25 @@ impl eframe::App for OrbitViewerApp {
                 });
 
                 ui.separator();
-                ui.label("Maillage :");
+                ui.label("Mesh:");
                 ui.small(format!(
-                    "{} sommets, {} triangles, {} arêtes uniques",
+                    "{} vertices, {} triangles, {} unique edges",
                     self.mesh.vertices.len(),
                     self.mesh.triangle_count(),
                     self.mesh.edges().len()
                 ));
 
                 ui.separator();
-                ui.collapsing("🖱️ Contrôles Caméra", |ui| {
-                    ui.small("• Clic Gauche + Glisser : Orbite");
-                    ui.small("• Molette : Zoom");
-                    ui.small("• Clic Droit / Molette : Panoramique");
+                ui.collapsing("🖱️ Camera controls", |ui| {
+                    ui.small("• Left-click and drag: orbit");
+                    ui.small("• Scroll wheel: zoom");
+                    ui.small("• Right/middle-click and drag: pan");
                 });
             });
 
-        // 3. Zone de rendu 3D
+        // 3. 3D rendering area
         egui::CentralPanel::default().show(ui, |ui| {
-            // Calcul préalable du rectangle du graphe pour éviter tout conflit de borrow avec `ui`
+            // Calculate the chart rectangle first to avoid a borrow conflict with `ui`.
             let avail_rect = ui.available_rect_before_wrap();
             let chart_rect = egui::Rect::from_min_size(
                 egui::pos2(avail_rect.max.x - 230.0, avail_rect.min.y + 15.0),
@@ -195,7 +193,7 @@ impl eframe::App for OrbitViewerApp {
             );
 
             self.engine.render(ui, |r| {
-                // Rendu du maillage fil de fer
+                // Render the wireframe mesh
                 r.draw_mesh(
                     &self.mesh,
                     self.state.position,
@@ -203,13 +201,13 @@ impl eframe::App for OrbitViewerApp {
                     egui::Color32::from_rgb(100, 200, 255),
                 );
 
-                // Repère d'axes XYZ sur l'objet
+                // XYZ axes on the object
                 r.draw_axes(self.state.position, self.state.rotation, 1.2);
 
-                // Trajectoire historique
+                // Trail history
                 r.draw_trail(self.trail.as_slice(), egui::Color32::GOLD);
 
-                // Overlay Graphe 2D de télémétrie (Altitude)
+                // 2D telemetry chart overlay (altitude)
                 r.draw_chart(
                     chart_rect,
                     &self.altitude_history,
@@ -220,7 +218,7 @@ impl eframe::App for OrbitViewerApp {
             });
         });
 
-        // Demande le rafraîchissement continu de l'affichage
+        // Request continuous repainting.
         ctx.request_repaint();
     }
 }

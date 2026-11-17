@@ -2,10 +2,10 @@
 # GPL-2.0-or-later
 [package]
 name          = "drew-sim"
-version       = "0.4.0"
+version       = "0.4.1"
 edition       = "2024"
 authors       = ["Jorge Andre Castro <georgeandrec@gmail.com>"]
-description   = "Librairie de rendu 3D immédiat pour eframe/egui : maillages STL, caméra orbitale, télémétrie (axes, trajectoire, graphes)."
+description   = "Immediate-mode 3D rendering for eframe/egui: STL meshes, an orbital camera, and telemetry visualization (axes, trails, charts)."
 documentation = "https://docs.rs/drew-sim"
 readme        = "README.md"
 keywords      = ["egui", "eframe", "3d", "rendering", "stl"]
@@ -29,7 +29,7 @@ path = "examples/orbit_viewer.rs"
 
 [features]
 default = ["stl"]
-# Chargement de maillages depuis des fichiers .STL via stl_io
+# Load meshes from .STL files using stl_io
 stl = ["dep:stl_io"]
 
 [dependencies]

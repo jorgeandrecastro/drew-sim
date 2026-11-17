@@ -1,57 +1,57 @@
-//! Primitives mathématiques : vecteurs 3D et rotations d'Euler.
+//! Mathematical primitives: 3D vectors and Euler rotations.
 //!
 //! # Conventions
 //!
-//! - Repère **main droite**, angles en **radians**, positifs dans le sens
-//!   trigonométrique (règle de la main droite autour de l'axe).
-//! - `roll` tourne autour de **Z**, `pitch` autour de **X**, `yaw` autour de **Y**.
-//! - Ordre d'application : roll, puis pitch, puis yaw, soit
+//! - **Right-handed** coordinate system; angles are in **radians** and positive
+//!   in the counterclockwise direction (the right-hand rule around the axis).
+//! - `roll` rotates around **Z**, `pitch` around **X**, and `yaw` around **Y**.
+//! - Application order: roll, then pitch, then yaw, i.e.
 //!   `R = Ry(yaw) * Rx(pitch) * Rz(roll)`.
-//! - Y est l'axe vertical de la scène ; Z, axe de roulis, est l'« avant »
-//!   du véhicule.
-//! - Les angles renvoyés par [`Rotation3D::compose`], [`Rotation3D::inverse`]
-//!   et [`Rotation3D::from_matrix`] sont **normalisés** : `pitch` dans
-//!   `[-π/2, π/2]`, `roll` et `yaw` dans `[-π, π]`. Le triplet peut donc
-//!   différer de celui d'entrée tout en représentant la même rotation.
+//! - Y is the scene's vertical axis; Z, the roll axis, points toward the
+//!   vehicle's front.
+//! - Angles returned by [`Rotation3D::compose`], [`Rotation3D::inverse`], and
+//!   [`Rotation3D::from_matrix`] are **normalized**: `pitch` is in
+//!   `[-π/2, π/2]`, and `roll` and `yaw` are in `[-π, π]`. The returned triplet
+//!   may differ from the input while representing the same rotation.
 
-/// Vecteur / point 3D (x, y, z).
+/// 3D vector / point (x, y, z).
 pub type Vec3 = [f32; 3];
 
-/// Matrice 3x3, stockée ligne par ligne.
+/// 3x3 matrix, stored row by row.
 pub type Mat3 = [[f32; 3]; 3];
 
-/// Matrice identité 3x3.
+/// 3x3 identity matrix.
 pub const IDENTITY_MAT3: Mat3 = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
 
-/// Addition de deux vecteurs.
+/// Adds two vectors.
 #[must_use]
 #[inline]
 pub fn add(a: Vec3, b: Vec3) -> Vec3 {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
 
-/// Soustraction de deux vecteurs.
+/// Subtracts two vectors.
 #[must_use]
 #[inline]
 pub fn sub(a: Vec3, b: Vec3) -> Vec3 {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
-/// Mise à l'échelle d'un vecteur par un scalaire.
+/// Scales a vector by a scalar.
 #[must_use]
 #[inline]
 pub fn scale(a: Vec3, s: f32) -> Vec3 {
     [a[0] * s, a[1] * s, a[2] * s]
 }
 
-/// Produit scalaire.
+/// Dot product.
 #[must_use]
 #[inline]
 pub fn dot(a: Vec3, b: Vec3) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-/// Produit vectoriel.
+/// Cross product.
 #[must_use]
 #[inline]
 pub fn cross(a: Vec3, b: Vec3) -> Vec3 {
@@ -62,15 +62,15 @@ pub fn cross(a: Vec3, b: Vec3) -> Vec3 {
     ]
 }
 
-/// Norme (longueur) du vecteur.
+/// Vector magnitude (length).
 #[must_use]
 #[inline]
 pub fn length(a: Vec3) -> f32 {
     dot(a, a).sqrt()
 }
 
-/// Normalise le vecteur. Renvoie le vecteur d'origine si sa longueur
-/// est trop proche de zéro (évite une division par zéro).
+/// Normalizes the vector. Returns the original vector if its length is too
+/// close to zero (avoids division by zero).
 #[must_use]
 #[inline]
 pub fn normalize(a: Vec3) -> Vec3 {
@@ -82,7 +82,7 @@ pub fn normalize(a: Vec3) -> Vec3 {
     }
 }
 
-/// Produit de deux matrices 3x3 (`a * b`).
+/// Product of two 3x3 matrices (`a * b`).
 #[must_use]
 pub fn mat3_mul(a: Mat3, b: Mat3) -> Mat3 {
     let mut out = [[0.0; 3]; 3];
@@ -94,14 +94,14 @@ pub fn mat3_mul(a: Mat3, b: Mat3) -> Mat3 {
     out
 }
 
-/// Produit matrice x vecteur (`m * v`).
+/// Matrix-vector product (`m * v`).
 #[must_use]
 #[inline]
 pub fn mat3_mul_vec(m: &Mat3, v: Vec3) -> Vec3 {
     [dot(m[0], v), dot(m[1], v), dot(m[2], v)]
 }
 
-/// Transposée d'une matrice 3x3 (= inverse pour une matrice de rotation).
+/// Transpose of a 3x3 matrix (equal to the inverse for a rotation matrix).
 #[must_use]
 pub fn mat3_transpose(m: Mat3) -> Mat3 {
     [
@@ -111,56 +111,56 @@ pub fn mat3_transpose(m: Mat3) -> Mat3 {
     ]
 }
 
-/// Rotation exprimée en angles d'Euler (radians).
+/// Rotation expressed as Euler angles (radians).
 ///
-/// Voir les conventions dans la documentation du module.
+/// See the module documentation for conventions.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rotation3D {
-    /// Roulis : rotation autour de Z (radians).
+    /// Roll: rotation around Z (radians).
     pub roll: f32,
-    /// Tangage : rotation autour de X (radians).
+    /// Pitch: rotation around X (radians).
     pub pitch: f32,
-    /// Lacet : rotation autour de Y (radians).
+    /// Yaw: rotation around Y (radians).
     pub yaw: f32,
 }
 
 impl Rotation3D {
-    /// Rotation nulle.
+    /// Zero rotation.
     pub const IDENTITY: Self = Self { roll: 0.0, pitch: 0.0, yaw: 0.0 };
 
-    /// Construit une rotation à partir de `roll`, `pitch`, `yaw` (radians).
+    /// Creates a rotation from `roll`, `pitch`, and `yaw` (radians).
     #[must_use]
     #[inline]
     pub const fn new(roll: f32, pitch: f32, yaw: f32) -> Self {
         Self { roll, pitch, yaw }
     }
 
-    /// Applique la rotation (roll, puis pitch, puis yaw) à un point 3D.
+    /// Applies the rotation (roll, then pitch, then yaw) to a 3D point.
     ///
-    /// Pour beaucoup de points, préférer [`Self::rotate_points`] qui ne
-    /// calcule la matrice qu'une fois.
+    /// For many points, prefer [`Self::rotate_points`], which computes the
+    /// matrix only once.
     #[must_use]
     #[inline]
     pub fn rotate_point(self, p: Vec3) -> Vec3 {
         mat3_mul_vec(&self.to_matrix(), p)
     }
 
-    /// Applique la rotation à un lot de points (matrice calculée une seule fois).
+    /// Applies the rotation to a batch of points (the matrix is computed once).
     #[must_use]
     pub fn rotate_points(self, pts: &[Vec3]) -> Vec<Vec3> {
         let m = self.to_matrix();
         pts.iter().map(|&p| mat3_mul_vec(&m, p)).collect()
     }
 
-    /// Comme [`Self::rotate_points`], mais réutilise un buffer existant
-    /// (aucune allocation une fois `out` dimensionné : idéal à chaque frame).
+    /// Like [`Self::rotate_points`], but reuses an existing buffer (no
+    /// allocations once `out` has been sized; ideal for every frame).
     pub fn rotate_points_into(self, pts: &[Vec3], out: &mut Vec<Vec3>) {
         let m = self.to_matrix();
         out.clear();
         out.extend(pts.iter().map(|&p| mat3_mul_vec(&m, p)));
     }
 
-    /// Convertit en matrice de rotation 3x3 (`R = Ry(yaw) * Rx(pitch) * Rz(roll)`).
+    /// Converts to a 3x3 rotation matrix (`R = Ry(yaw) * Rx(pitch) * Rz(roll)`).
     #[must_use]
     pub fn to_matrix(self) -> Mat3 {
         let (sr, cr) = self.roll.sin_cos();
@@ -174,13 +174,13 @@ impl Rotation3D {
         ]
     }
 
-    /// Reconstruit des angles normalisés à partir d'une matrice de rotation
-    /// (même convention que [`Self::to_matrix`]).
+    /// Reconstructs normalized angles from a rotation matrix (using the same
+    /// convention as [`Self::to_matrix`]).
     ///
-    /// `cos(pitch)` est obtenu à partir des éléments de la matrice (`hypot`)
-    /// et non via `asin` puis `cos`, ce qui reste précis près de ±90°.
-    /// Au gimbal lock (pitch ≈ ±90°), roll et yaw ne sont plus
-    /// indépendants : `yaw` est figé à 0 et tout est reporté sur `roll`.
+    /// `cos(pitch)` is computed from matrix elements using `hypot`, rather
+    /// than `asin` followed by `cos`, preserving precision near ±90°.
+    /// At gimbal lock (pitch ≈ ±90°), roll and yaw are no longer independent:
+    /// `yaw` is fixed at 0 and the rotation is represented through `roll`.
     #[must_use]
     pub fn from_matrix(m: Mat3) -> Self {
         const GIMBAL_EPS: f32 = 1e-4;
@@ -199,36 +199,35 @@ impl Rotation3D {
         }
     }
 
-    /// Renvoie la même rotation avec des angles normalisés
-    /// (`pitch` dans `[-π/2, π/2]`, `roll` et `yaw` dans `[-π, π]`).
+    /// Returns the same rotation with normalized angles (`pitch` in
+    /// `[-π/2, π/2]`, and `roll` and `yaw` in `[-π, π]`).
     #[must_use]
     pub fn normalized(self) -> Self {
         Self::from_matrix(self.to_matrix())
     }
 
-    /// Compose deux rotations : appliquer `self` d'abord, puis `other`
+    /// Composes two rotations: apply `self` first, then `other`
     /// (`other.rotate_point(self.rotate_point(p)) == self.compose(other).rotate_point(p)`).
     ///
-    /// Calculé par produit de matrices (exact), pas par somme d'angles :
-    /// les rotations 3D ne commutent pas.
+    /// Computed using an exact matrix product, not by adding angles: 3D
+    /// rotations do not commute.
     ///
-    /// Les angles renvoyés sont normalisés (voir la doc du module).
-    /// Près du gimbal lock (pitch ≈ ±90°), la rotation reste
-    /// géométriquement correcte mais l'angle peut être redistribué entre
-    /// roll et yaw.
+    /// Returned angles are normalized (see the module documentation). Near
+    /// gimbal lock (pitch ≈ ±90°), the rotation remains geometrically correct,
+    /// but the angle may be redistributed between roll and yaw.
     #[must_use]
     pub fn compose(self, other: Rotation3D) -> Rotation3D {
         Self::from_matrix(mat3_mul(other.to_matrix(), self.to_matrix()))
     }
 
-    /// Rotation inverse (`self.compose(self.inverse())` ≈ identité).
+    /// Inverse rotation (`self.compose(self.inverse())` ≈ identity).
     #[must_use]
     pub fn inverse(self) -> Rotation3D {
         Self::from_matrix(mat3_transpose(self.to_matrix()))
     }
 
-    /// Interpolation sphérique entre `self` (t = 0) et `other` (t = 1),
-    /// par le chemin le plus court, via quaternions.
+    /// Spherical interpolation between `self` (t = 0) and `other` (t = 1)
+    /// along the shortest path, using quaternions.
     #[must_use]
     pub fn slerp(self, other: Rotation3D, t: f32) -> Rotation3D {
         crate::quat::Quat::from(self)
@@ -255,8 +254,8 @@ mod tests {
         }
     }
 
-    /// Deux rotations sont identiques si elles envoient les mêmes points
-    /// aux mêmes endroits (indépendant de la représentation en angles).
+    /// Two rotations are identical if they map the same points to the same
+    /// locations, regardless of their angle representation.
     fn assert_same_effect(a: Rotation3D, b: Rotation3D, eps: f32) {
         for p in PROBES {
             assert_vec3_close(a.rotate_point(p), b.rotate_point(p), eps);
@@ -296,8 +295,8 @@ mod tests {
 
     #[test]
     fn naive_euler_addition_is_wrong() {
-        // Deux rotations de 90° sur des axes différents : additionner les
-        // angles ne donne pas le même résultat que composer les matrices.
+        // Two 90° rotations around different axes: adding the angles does not
+        // produce the same result as composing the matrices.
         let a = Rotation3D::new(0.0, FRAC_PI_2, 0.0);
         let b = Rotation3D::new(FRAC_PI_2, 0.0, 0.0);
         let p = [0.0, 0.0, 1.0];
@@ -307,13 +306,13 @@ mod tests {
         let correct = a.compose(b).rotate_point(p);
 
         let diff: f32 = (0..3).map(|i| (naive_sum[i] - correct[i]).abs()).sum();
-        assert!(diff > 1e-3, "les deux approches devraient diverger ici");
+        assert!(diff > 1e-3, "the two approaches should differ here");
     }
 
     #[test]
     fn compose_with_identity_preserves_effect() {
-        // On compare l'effet et non les angles : un angle hors plage
-        // (ex. roll = 4.0) ressort normalisé.
+        // Compare the effect rather than the angles: an out-of-range angle
+        // (e.g. roll = 4.0) is returned in normalized form.
         for r in [
             Rotation3D::new(0.4, -0.2, 1.1),
             Rotation3D::new(4.0, 0.3, -5.0),
@@ -341,7 +340,7 @@ mod tests {
 
     #[test]
     fn matrix_roundtrip_returns_same_angles_in_range() {
-        // Dans la plage normalisée et loin du gimbal lock, on retrouve les angles.
+        // Within the normalized range and away from gimbal lock, the angles are recovered.
         let r = Rotation3D::new(0.5, -0.8, 2.0);
         let back = Rotation3D::from_matrix(r.to_matrix());
         assert!((back.roll - r.roll).abs() < 1e-5);

@@ -1,4 +1,4 @@
-//! Maillages triangulaires : stockage, primitives, chargement STL.
+//! Triangular meshes: storage, primitives, and STL loading.
 
 use crate::math::Vec3;
 use std::sync::OnceLock;
@@ -6,21 +6,21 @@ use std::sync::OnceLock;
 #[cfg(feature = "stl")]
 use std::path::Path;
 
-/// Erreurs pouvant survenir lors du chargement d'un maillage.
+/// Errors that may occur while loading a mesh.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum MeshError {
-    /// Erreur d'entrée/sortie (fichier introuvable, illisible…).
+    /// I/O error (file not found, unreadable, etc.).
     Io(std::io::Error),
-    /// Contenu invalide (fichier corrompu, index hors bornes…).
+    /// Invalid content (corrupt file, out-of-bounds index, etc.).
     Parse(String),
 }
 
 impl std::fmt::Display for MeshError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MeshError::Io(e) => write!(f, "erreur d'entrée/sortie: {e}"),
-            MeshError::Parse(e) => write!(f, "erreur de lecture du maillage: {e}"),
+            MeshError::Io(e) => write!(f, "I/O error: {e}"),
+            MeshError::Parse(e) => write!(f, "mesh read error: {e}"),
         }
     }
 }
@@ -40,47 +40,47 @@ impl From<std::io::Error> for MeshError {
     }
 }
 
-/// Maillage 3D : liste de sommets et de triangles (indices dans `vertices`).
+/// 3D mesh: a list of vertices and triangles (indices into `vertices`).
 ///
-/// Les arêtes uniques (utilisées par le rendu fil de fer) sont calculées
-/// une fois, à la première demande, puis mises en cache. **Si tu modifies
-/// `triangles` après coup, appelle [`Mesh3D::invalidate_edges`].**
+/// Unique edges (used for wireframe rendering) are computed once on the first
+/// request and then cached. **If you modify `triangles` afterward, call
+/// [`Mesh3D::invalidate_edges`].**
 #[derive(Clone, Debug, Default)]
 pub struct Mesh3D {
-    /// Sommets du maillage.
+    /// Mesh vertices.
     pub vertices: Vec<Vec3>,
-    /// Triangles, sous forme de trois indices dans `vertices`.
+    /// Triangles, each represented by three indices into `vertices`.
     pub triangles: Vec<[usize; 3]>,
     edges: OnceLock<Vec<[usize; 2]>>,
 }
 
 impl Mesh3D {
-    /// Construit un maillage vide.
+    /// Creates an empty mesh.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Construit un maillage à partir de sommets et de triangles bruts.
+    /// Creates a mesh from raw vertices and triangles.
     ///
     /// # Errors
-    /// Retourne une erreur si un triangle référence un index hors bornes.
+    /// Returns an error if a triangle references an out-of-bounds index.
     pub fn from_raw(vertices: Vec<Vec3>, triangles: Vec<[usize; 3]>) -> Result<Self, MeshError> {
         let n = vertices.len();
         for tri in &triangles {
             if tri.iter().any(|&i| i >= n) {
                 return Err(MeshError::Parse(format!(
-                    "index de triangle hors bornes: {tri:?} (n_vertices={n})"
+                    "triangle index out of bounds: {tri:?} (n_vertices={n})"
                 )));
             }
         }
         Ok(Self { vertices, triangles, edges: OnceLock::new() })
     }
 
-    /// Charge un modèle depuis un fichier `.stl` (binaire ou ASCII).
+    /// Loads a model from a `.stl` file (binary or ASCII).
     ///
     /// # Errors
-    /// Erreur d'E/S ou de lecture du fichier.
+    /// Returns an I/O or file-reading error.
     #[cfg(feature = "stl")]
     pub fn from_stl_file<P: AsRef<Path>>(path: P) -> Result<Self, MeshError> {
         let mut file = std::fs::File::open(path)?;
@@ -92,8 +92,8 @@ impl Mesh3D {
         Self::from_raw(vertices, triangles)
     }
 
-    /// Un cube centré à l'origine (arête de longueur `size`), utile pour
-    /// les tests et les exemples sans dépendre d'un fichier STL.
+    /// A cube centered at the origin with edge length `size`, useful for tests
+    /// and examples that do not depend on an STL file.
     #[must_use]
     pub fn unit_cube(size: f32) -> Self {
         let h = size * 0.5;
@@ -102,31 +102,30 @@ impl Mesh3D {
             [-h, -h, h],  [h, -h, h],  [h, h, h],  [-h, h, h],
         ];
         let triangles = vec![
-            [0, 1, 2], [0, 2, 3], // arrière
-            [4, 6, 5], [4, 7, 6], // avant
-            [0, 4, 5], [0, 5, 1], // dessous
-            [3, 2, 6], [3, 6, 7], // dessus
-            [0, 3, 7], [0, 7, 4], // gauche
-            [1, 5, 6], [1, 6, 2], // droite
+            [0, 1, 2], [0, 2, 3], // back
+            [4, 6, 5], [4, 7, 6], // front
+            [0, 4, 5], [0, 5, 1], // bottom
+            [3, 2, 6], [3, 6, 7], // top
+            [0, 3, 7], [0, 7, 4], // left
+            [1, 5, 6], [1, 6, 2], // right
         ];
         Self { vertices, triangles, edges: OnceLock::new() }
     }
 
-    /// Nombre de triangles.
+    /// Number of triangles.
     #[must_use]
     pub fn triangle_count(&self) -> usize {
         self.triangles.len()
     }
 
-    /// Arêtes uniques du maillage (chaque arête partagée par deux triangles
-    /// n'apparaît qu'une fois), triées, avec `a < b`. Calculées à la
-    /// première demande puis mises en cache.
+    /// Unique mesh edges (each edge shared by two triangles appears only once),
+    /// sorted with `a < b`. Computed on first request and then cached.
     #[must_use]
     pub fn edges(&self) -> &[[usize; 2]] {
         self.edges.get_or_init(|| unique_edges(&self.triangles))
     }
 
-    /// Oublie le cache d'arêtes. À appeler après avoir modifié `triangles`.
+    /// Clears the edge cache. Call after modifying `triangles`.
     pub fn invalidate_edges(&mut self) {
         self.edges = OnceLock::new();
     }
@@ -152,7 +151,7 @@ mod tests {
 
     #[test]
     fn cube_has_18_unique_edges() {
-        // 12 arêtes du cube + 6 diagonales de faces (12 triangles = 36 arêtes brutes).
+        // 12 cube edges + 6 face diagonals (12 triangles = 36 raw edges).
         let cube = Mesh3D::unit_cube(1.0);
         assert_eq!(cube.triangle_count(), 12);
         assert_eq!(cube.edges().len(), 18);

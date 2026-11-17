@@ -1,14 +1,13 @@
 #![warn(missing_docs)]
 //! # drew-sim
 //!
-//! Librairie de rendu 3D immédiat pour applications [`eframe`]/[`egui`].
+//! An immediate-mode 3D rendering library for [`eframe`]/[`egui`] applications.
 //!
-//! Pensée pour la visualisation de télémétrie (drones, robots, capteurs
-//! d'orientation) : chargement de maillages `.stl`, caméra orbitale avec
-//! zoom/pan à la souris, et primitives de dessin (maillage fil de fer,
-//! repère XYZ, trajectoire, graphe de valeurs).
+//! Designed for telemetry visualization (drones, robots, orientation sensors):
+//! `.stl` mesh loading, an orbital camera with mouse-controlled zoom and pan,
+//! and drawing primitives (wireframe meshes, XYZ axes, trails, and charts).
 //!
-//! ## Exemple minimal
+//! ## Minimal example
 //!
 //! ```no_run
 //! use drew_sim::{Engine3D, Mesh3D, TelemetryState};
@@ -48,6 +47,6 @@ pub use quat::Quat;
 pub use render::Render3D;
 pub use telemetry::{TelemetryState, TrailBuffer};
 
-// Ré-export pratique pour les consommateurs de la librairie.
+// Convenient re-exports for library consumers.
 pub use eframe;
 pub use eframe::egui;

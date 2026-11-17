@@ -1,32 +1,32 @@
-//! Contexte de rendu : projection 3D -> 2D et primitives de dessin.
+//! Rendering context: 3D-to-2D projection and drawing primitives.
 
 use crate::math::{add, mat3_mul_vec, Rotation3D, Vec3};
 use crate::mesh::Mesh3D;
 use eframe::egui;
 
-/// Contexte transmis lors du callback de dessin d'une frame.
+/// Context passed to the drawing callback for a frame.
 ///
-/// Regroupe tout ce qu'il faut pour projeter un point 3D vers l'écran et
-/// dessiner par-dessus (maillages, repères, trajectoires, graphes).
+/// Provides everything needed to project a 3D point onto the screen and draw
+/// on top of it (meshes, axes, trails, and charts).
 pub struct Render3D<'a> {
-    /// Peintre egui limité à la zone de rendu.
+    /// egui painter clipped to the rendering area.
     pub painter: &'a egui::Painter,
-    /// Centre de la scène à l'écran (pan inclus).
+    /// Scene center on screen (including pan).
     pub center: egui::Pos2,
-    /// Ordonnée écran du sol (y = 0).
+    /// Screen-space vertical coordinate of the ground (y = 0).
     pub ground_y: f32,
-    /// Angle d'orbite de la caméra (radians) autour de l'axe vertical.
+    /// Camera orbit angle (radians) around the vertical axis.
     pub camera_orbit: f32,
-    /// Facteur de zoom.
+    /// Zoom factor.
     pub zoom: f32,
 }
 
 impl Render3D<'_> {
-    /// Projection d'un point du monde 3D vers un point écran 2D.
+    /// Projects a point in the 3D world to a 2D screen point.
     ///
-    /// Projection orthographique simplifiée avec rotation orbitale sur
-    /// l'axe vertical ; il n'y a donc ni perspective ni profondeur, et
-    /// aucun point ne peut se trouver « derrière » la caméra.
+    /// Simplified orthographic projection with orbital rotation around the
+    /// vertical axis; there is no perspective or depth, and no point can be
+    /// "behind" the camera.
     #[must_use]
     pub fn world_to_screen(&self, pos: Vec3) -> egui::Pos2 {
         let base_scale = 50.0 * self.zoom;
@@ -39,15 +39,15 @@ impl Render3D<'_> {
         )
     }
 
-    /// Dessine un maillage en fil de fer à la position/orientation données.
+    /// Draws a wireframe mesh at the given position and orientation.
     pub fn draw_mesh(&self, mesh: &Mesh3D, position: Vec3, rotation: Rotation3D, color: egui::Color32) {
         self.draw_mesh_with_stroke(mesh, position, rotation, egui::Stroke::new(1.0, color));
     }
 
-    /// Variante de `draw_mesh` avec un `Stroke` complet (épaisseur incluse).
+    /// Variant of `draw_mesh` with a complete `Stroke` (including line width).
     ///
-    /// Chaque sommet n'est tourné et projeté qu'une seule fois, et chaque
-    /// arête partagée n'est dessinée qu'une fois (voir [`Mesh3D::edges`]).
+    /// Each vertex is rotated and projected only once, and each shared edge is
+    /// drawn only once (see [`Mesh3D::edges`]).
     pub fn draw_mesh_with_stroke(
         &self,
         mesh: &Mesh3D,
@@ -77,7 +77,7 @@ impl Render3D<'_> {
         self.painter.extend(shapes);
     }
 
-    /// Dessine le repère d'axes XYZ (Rouge=X, Vert=Y, Bleu=Z) à une position.
+    /// Draws the XYZ axes (red = X, green = Y, blue = Z) at a position.
     pub fn draw_axes(&self, position: Vec3, rotation: Rotation3D, length: f32) {
         let m = rotation.to_matrix();
         let tip = |axis: Vec3| self.world_to_screen(add(position, mat3_mul_vec(&m, axis)));
@@ -92,7 +92,7 @@ impl Render3D<'_> {
         self.painter.line_segment([p_origin, p_z], egui::Stroke::new(2.5, egui::Color32::BLUE));
     }
 
-    /// Dessine l'historique d'une trajectoire (polyligne reliant `points`).
+    /// Draws a trail history (a polyline connecting `points`).
     pub fn draw_trail(&self, points: &[Vec3], color: egui::Color32) {
         if points.len() < 2 {
             return;
@@ -101,8 +101,8 @@ impl Render3D<'_> {
         self.painter.add(egui::Shape::line(pts, egui::Stroke::new(1.5, color)));
     }
 
-    /// Dessine un graphique 2D (courbe de valeurs) dans un rectangle donné
-    /// de l'écran, indépendamment de la caméra 3D.
+    /// Draws a 2D chart (value curve) in the given screen rectangle,
+    /// independent of the 3D camera.
     pub fn draw_chart(&self, rect: egui::Rect, values: &[f32], min_val: f32, max_val: f32, color: egui::Color32) {
         if values.len() < 2 || (max_val - min_val).abs() < f32::EPSILON {
             return;

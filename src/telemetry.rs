@@ -1,30 +1,30 @@
-//! Contrat de télémétrie agnostique de la source (capteurs, simulation, replay).
+//! Source-agnostic telemetry contract (sensors, simulation, or log playback).
 
 use crate::math::{Rotation3D, Vec3};
 
-/// Position et orientation d'un objet à un instant donné.
+/// Position and orientation of an object at a given instant.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TelemetryState {
-    /// Position dans la scène.
+    /// Position in the scene.
     pub position: Vec3,
-    /// Orientation (angles d'Euler, voir la convention dans [`crate::math`]).
+    /// Orientation (Euler angles; see the conventions in [`crate::math`]).
     pub rotation: Rotation3D,
 }
 
 impl TelemetryState {
-    /// Construit un état de télémétrie.
+    /// Creates a telemetry state.
     #[must_use]
     pub const fn new(position: Vec3, rotation: Rotation3D) -> Self {
         Self { position, rotation }
     }
 }
 
-/// Historique borné de positions, utile pour tracer une trajectoire
-/// (`draw_trail`) sans laisser le buffer grandir indéfiniment.
+/// Bounded history of positions, useful for drawing a trail (`draw_trail`)
+/// without allowing the buffer to grow indefinitely.
 ///
-/// Garde les `capacity` dernières positions. En interne, le stockage peut
-/// atteindre `2 * capacity` avant d'être compacté, ce qui rend `push`
-/// amorti O(1) (au lieu de décaler tout le buffer à chaque insertion).
+/// Keeps the last `capacity` positions. Internally, storage may reach
+/// `2 * capacity` before being compacted, making `push` amortized O(1)
+/// (instead of shifting the entire buffer on every insertion).
 #[derive(Clone, Debug)]
 pub struct TrailBuffer {
     points: Vec<Vec3>,
@@ -32,14 +32,14 @@ pub struct TrailBuffer {
 }
 
 impl TrailBuffer {
-    /// Crée un historique de `capacity` positions maximum
-    /// (avec `capacity == 0`, rien n'est jamais conservé).
+    /// Creates a history holding at most `capacity` positions
+    /// (when `capacity == 0`, no positions are retained).
     #[must_use]
     pub fn new(capacity: usize) -> Self {
         Self { points: Vec::with_capacity(capacity), capacity }
     }
 
-    /// Ajoute une position ; la plus ancienne est oubliée si le buffer est plein.
+    /// Adds a position; the oldest is discarded if the buffer is full.
     pub fn push(&mut self, p: Vec3) {
         if self.capacity == 0 {
             return;
@@ -51,31 +51,31 @@ impl TrailBuffer {
         }
     }
 
-    /// Les positions conservées, de la plus ancienne à la plus récente.
+    /// Retained positions, from oldest to newest.
     #[must_use]
     pub fn as_slice(&self) -> &[Vec3] {
         &self.points[self.points.len().saturating_sub(self.capacity)..]
     }
 
-    /// Nombre de positions conservées (au plus `capacity`).
+    /// Number of retained positions (at most `capacity`).
     #[must_use]
     pub fn len(&self) -> usize {
         self.as_slice().len()
     }
 
-    /// `true` si aucune position n'est conservée.
+    /// `true` if no positions are retained.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.points.is_empty()
     }
 
-    /// Capacité maximale.
+    /// Maximum capacity.
     #[must_use]
     pub fn capacity(&self) -> usize {
         self.capacity
     }
 
-    /// Vide l'historique.
+    /// Clears the history.
     pub fn clear(&mut self) {
         self.points.clear();
     }
